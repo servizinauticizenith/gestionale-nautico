@@ -22,6 +22,7 @@ function nuovoLavoroVuoto() {
     motore: "",
     matricola: "",
     lavoro: "",
+    interventiEseguiti: "",
     stato: "In lavorazione",
     priorita: "Normale",
     tecnico: "",
@@ -1050,11 +1051,23 @@ return testo.includes(ricerca.toLowerCase());});
         onChange={(v) => setForm({ ...form, lavoro: v })}
       />
 
+      <Textarea
+  label="Interventi eseguiti"
+  value={form.interventiEseguiti || ""}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      interventiEseguiti: v,
+    })
+  }
+/>
+
     <Textarea
   label="Ricambi / materiali"
   value={form.ricambi || ""}
   onChange={(v) => setForm({ ...form, ricambi: v })}
 />
+
 
 <div className="twoCols">
   <Input
