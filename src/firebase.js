@@ -1,5 +1,9 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
@@ -8,10 +12,15 @@ const firebaseConfig = {
   projectId: "gestionale-nautico",
   storageBucket: "gestionale-nautico.firebasestorage.app",
   messagingSenderId: "356589379344",
-  appId: "1:356589379344:web:030d75930b8bca2f000f95"
+  appId: "1:356589379344:web:030d75930b8bca2f000f95",
 };
 
 const app = initializeApp(firebaseConfig);
 
-export const db = getFirestore(app);
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+});
+
 export const auth = getAuth(app);

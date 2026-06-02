@@ -22,16 +22,18 @@ function nuovoLavoroVuoto() {
     motore: "",
     matricola: "",
     lavoro: "",
-    stato: "Accettazione",
+    stato: "In lavorazione",
     priorita: "Normale",
     tecnico: "",
     ingresso: new Date().toISOString().slice(0, 10),
     consegna: "",
     ricambi: "",
     costoRicambi: "",
-oreManodopera: "",
-prezzoOra: "45",
-altro: "",
+    oreManodopera: "",
+    prezzoOra: "45",
+    altro: "",
+    acconto: "",
+    pagamento: "Non pagato",   // ← AGGIUNGI QUESTA RIGA
     note: "",
   };
 }
@@ -46,10 +48,6 @@ function nuovoPreventivoVuoto() {
     motore: "",
     matricola: "",
     descrizione: "",
-    ricambi: "",
-    costoRicambi: "",
-    oreManodopera: "",
-    prezzoOra: "45",
     altro: "",
     stato: "Da preparare",
     note: "",
@@ -59,16 +57,16 @@ function nuovoPreventivoVuoto() {
 export default function App() {
   const [lavori, setLavori] = useState([]);
   const [preventivi, setPreventivi] = useState([]);
+  const [rimessaggi, setRimessaggi] = useState([]);
   const [clientiDb, setClientiDb] = useState([]);
   const [caricamento, setCaricamento] = useState(true);
   const [utente, setUtente] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [erroreLogin, setErroreLogin] = useState("");
-  
-
   const [form, setForm] = useState(nuovoLavoroVuoto());
   const [lavoroInModifica, setLavoroInModifica] = useState(null);
+  const [rimessaggioInModifica, setRimessaggioInModifica] = useState(null);
   const [formPreventivo, setFormPreventivo] = useState(nuovoPreventivoVuoto());
   const [formCliente, setFormCliente] = useState({
   cliente: "",
@@ -83,9 +81,11 @@ const [clienteInModifica, setClienteInModifica] = useState(null);
   const [ricerca, setRicerca] = useState("");
   const [ricercaClienteLavoro, setRicercaClienteLavoro] = useState("");
   const [filtroStato, setFiltroStato] = useState("Tutti");
+  const [filtroPagamento, setFiltroPagamento] = useState("Tutti");
+  const [filtroPagamentoRimessaggi, setFiltroPagamentoRimessaggi] = useState("Tutti");
   const [vista, setVista] = useState("lavori");
   const [preventivoDaStampare, setPreventivoDaStampare] = useState(null);
-  
+  const [rimessaggioDaStampare, setRimessaggioDaStampare] = useState(null);
   const [lavoroDaStampare, setLavoroDaStampare] = useState(null);
   function modificaCliente(cliente) {
   setFormCliente({
@@ -127,32 +127,43 @@ const [clienteInModifica, setClienteInModifica] = useState(null);
       firebaseId: documento.id,
     }))
     .sort((a, b) => {
-  if (a.stato === "Terminato" && b.stato !== "Terminato") return 1;
-  if (a.stato !== "Terminato" && b.stato === "Terminato") return -1;
+      if (a.stato === "Terminato" && b.stato !== "Terminato") return 1;
+      if (a.stato !== "Terminato" && b.stato === "Terminato") return -1;
 
-  if (!a.consegna) return 1;
-  if (!b.consegna) return -1;
+      if (!a.consegna) return 1;
+      if (!b.consegna) return -1;
 
-  return new Date(a.consegna) - new Date(b.consegna);
-});
+      return new Date(a.consegna) - new Date(b.consegna);
+    });
 
   setLavori(dati);
 });
+const stopRimessaggi = onSnapshot(
+  collection(db, "rimessaggi"),
+  (snapshot) => {
+    const dati = snapshot.docs.map((documento) => ({
+      ...documento.data(),
+      firebaseId: documento.id,
+    }));
+
+    setRimessaggi(dati);
+  }
+);
 
     const stopPreventivi = onSnapshot(collection(db, "preventivi"), (snapshot) => {
-      const stopClienti = onSnapshot(collection(db, "clienti"), (snapshot) => {
-  const dati = snapshot.docs.map((documento) => ({
-    firebaseId: documento.id,
-    ...documento.data(),
-  }));
-
-  setClientiDb(dati);
-});
       const dati = snapshot.docs.map((documento) => ({
         firebaseId: documento.id,
         ...documento.data(),
       }));
       setPreventivi(dati);
+    });
+
+    const stopClienti = onSnapshot(collection(db, "clienti"), (snapshot) => {
+      const dati = snapshot.docs.map((documento) => ({
+        firebaseId: documento.id,
+        ...documento.data(),
+      }));
+      setClientiDb(dati);
     });
 
     return () => {
@@ -229,6 +240,37 @@ async function salvaCliente(e) {
 
   setForm(nuovoLavoroVuoto());
 }
+async function salvaRimessaggio() {
+  if (!form.cliente?.trim()) {
+    alert("Inserisci il cliente.");
+    return;
+  }
+
+  const datiRimessaggio = {
+    ...form,
+    tipo: "rimessaggio",
+  };
+
+  if (rimessaggioInModifica) {
+    await updateDoc(
+      doc(db, "rimessaggi", rimessaggioInModifica),
+      datiRimessaggio
+    );
+
+    setRimessaggioInModifica(null);
+
+    alert("Rimessaggio aggiornato");
+  } else {
+    await addDoc(
+      collection(db, "rimessaggi"),
+      datiRimessaggio
+    );
+
+    alert("Rimessaggio salvato");
+  }
+
+  setForm(nuovoLavoroVuoto());
+}
 
   async function aggiungiPreventivo(e) {
     e.preventDefault();
@@ -266,33 +308,74 @@ async function salvaCliente(e) {
   }
 
   async function eliminaLavoro(firebaseId) {
-  if (!firebaseId) {
-    alert("ID lavoro mancante");
-    return;
-  }
+  const conferma = window.confirm(
+    "Vuoi eliminare questo lavoro?"
+  );
 
-  const conferma = window.confirm("Vuoi eliminare questo lavoro?");
   if (!conferma) return;
 
   try {
     await deleteDoc(doc(db, "lavori", firebaseId));
+
     alert("Lavoro eliminato");
   } catch (errore) {
-    console.error("Errore eliminazione lavoro:", errore);
-    alert("Errore durante eliminazione lavoro: " + errore.message);
+    console.error(
+      "Errore eliminazione lavoro:",
+      errore
+    );
+
+    alert(
+      "Errore durante eliminazione lavoro: " +
+      errore.message
+    );
   }
 }
 
-  async function eliminaPreventivo(firebaseId) {
-    if (!firebaseId) return;
-    if (!confirm("Vuoi eliminare questo preventivo?")) return;
-    await deleteDoc(doc(db, "preventivi", firebaseId));
-
-    if (preventivoInModifica === firebaseId) {
-      annullaModificaPreventivo();
-    }
+async function eliminaRimessaggio(firebaseId) {
+  if (!firebaseId) {
+    alert("ID rimessaggio mancante");
+    return;
   }
 
+  const conferma = window.confirm(
+    "Vuoi eliminare questo rimessaggio?"
+  );
+
+  if (!conferma) return;
+
+  try {
+    await deleteDoc(
+      doc(db, "rimessaggi", firebaseId)
+    );
+
+    alert("Rimessaggio eliminato");
+  } catch (errore) {
+    console.error(
+      "Errore eliminazione rimessaggio:",
+      errore
+    );
+
+    alert(
+      "Errore durante eliminazione rimessaggio: " +
+      errore.message
+    );
+  }
+}
+
+async function eliminaPreventivo(firebaseId) {
+  if (!firebaseId) return;
+
+  if (!confirm("Vuoi eliminare questo preventivo?"))
+    return;
+
+  await deleteDoc(
+    doc(db, "preventivi", firebaseId)
+  );
+
+  if (preventivoInModifica === firebaseId) {
+    annullaModificaPreventivo();
+  }
+}
   function modificaPreventivo(preventivo) {
     setVista("preventivi");
     setPreventivoInModifica(preventivo.firebaseId);
@@ -362,7 +445,7 @@ async function salvaCliente(e) {
             font-size: 20px;
           }
             p {
-  margin-top: 4px;
+  margin: 2px 0;
   font-size: 10px;
 }
 
@@ -378,18 +461,18 @@ async function salvaCliente(e) {
             gap: 6px;
           }
 
-          .section {
-            border: 1px solid #d1d5db;
-            padding: 16px;
-            margin-bottom: 16px;
-            border-radius: 10px;
-          }
+        .section {
+  border: 1px solid #d1d5db;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+}
 
-          .twoCols {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-          }
+         .twoCols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
 
           .priceRows div {
             display: flex;
@@ -460,21 +543,23 @@ async function salvaCliente(e) {
         </div>
 
         <div class="section">
-          <h2>Descrizione lavori</h2>
-          <p>${preventivo.descrizione || "-"}</p>
-        </div>
+  <h2>Descrizione</h2>
+
+  <div
+    style="
+      height: 300px;
+      white-space: pre-wrap;
+      padding-top: 10px;
+    "
+  >
+    ${preventivo.descrizione || "-"}
+  </div>
+</div>
 
         <div class="section">
-          <h2>Ricambi / materiali</h2>
-          <p>${preventivo.ricambi || "-"}</p>
-        </div>
-
-        <div class="section">
-          <h2>Dettaglio economico</h2>
+          
           <div class="priceRows">
-            <div><span>Ricambi / materiali</span><strong>${euro(numero(preventivo.costoRicambi))}</strong></div>
-            <div><span>Manodopera (${preventivo.oreManodopera || 0} h x ${euro(numero(preventivo.prezzoOra))})</span><strong>${euro(manodopera)}</strong></div>
-            <div><span>Altro</span><strong>${euro(numero(preventivo.altro))}</strong></div>
+            
             <div class="total"><span>Totale preventivo</span><strong>${euro(totale)}</strong></div>
           </div>
         </div>
@@ -495,11 +580,10 @@ async function salvaCliente(e) {
             <div class="signatureLine"></div>
           </div>
         </div>
-
-        <p class="small">
-          Preventivo salvo diversa indicazione. Eventuali lavorazioni aggiuntive verranno comunicate prima dell'esecuzione.
-        </p>
-
+<p style="margin-top: 30px; font-size: 12px;">
+  Validità offerta: 7 giorni
+</p>
+        
         <script>
           window.onload = function() {
             window.print();
@@ -570,7 +654,6 @@ async function salvaCliente(e) {
       motore: lavoro.motore || "",
       matricola: lavoro.matricola || "",
       descrizione: lavoro.lavoro || "",
-      ricambi: lavoro.ricambi || "",
       note: lavoro.note || "",
     });
   }
@@ -644,20 +727,26 @@ async function salvaCliente(e) {
   }, [lavori]);
 
   const lavoriFiltrati = useMemo(() => {
-    return lavori.filter((lavoro) => {
-      const testo = Object.values(lavoro).join(" ").toLowerCase();
-      const matchRicerca = testo.includes(ricerca.toLowerCase());
-      const matchStato = filtroStato === "Tutti" || lavoro.stato === filtroStato;
-      return matchRicerca && matchStato;
-    });
-  }, [lavori, ricerca, filtroStato]);
+  return lavori.filter((lavoro) => {
+    const testo = Object.values(lavoro).join(" ").toLowerCase();
 
-  const clientiFiltrati = useMemo(() => {
-    return clienti.filter((cliente) => {
-      const testo = Object.values(cliente).join(" ").toLowerCase();
-      return testo.includes(ricerca.toLowerCase());
-    });
-  }, [clienti, ricerca]);
+    const matchRicerca = testo.includes(ricerca.toLowerCase());
+
+    const matchStato =
+      filtroStato === "Tutti" ||
+      (lavoro.stato || "").trim().toLowerCase() ===
+        filtroStato.trim().toLowerCase();
+
+    const pagamentoLavoro = lavoro.pagamento || "Non pagato";
+
+    const matchPagamento =
+      filtroPagamento === "Tutti" ||
+      pagamentoLavoro === filtroPagamento;
+
+    return matchRicerca && matchStato && matchPagamento;
+  });
+}, [lavori, ricerca, filtroStato, filtroPagamento]);
+  
 
   const preventiviFiltrati = useMemo(() => {
     return preventivi.filter((preventivo) => {
@@ -665,6 +754,32 @@ async function salvaCliente(e) {
       return testo.includes(ricerca.toLowerCase());
     });
   }, [preventivi, ricerca]);
+  
+  const rimessaggiFiltrati = useMemo(() => {
+  return rimessaggi.filter((r) => {
+    const matchRicerca =
+      ricerca === "" ||
+      JSON.stringify(r)
+        .toLowerCase()
+        .includes(ricerca.toLowerCase());
+
+    const matchPagamento =
+      filtroPagamentoRimessaggi === "Tutti" ||
+      (r.pagamento || "") === filtroPagamentoRimessaggi;
+
+    return matchRicerca && matchPagamento;
+  });
+}, [rimessaggi, filtroPagamentoRimessaggi, ricerca]);
+   
+  const clientiFiltrati = useMemo(() => {
+    return clienti.filter((cliente) => {
+      const testo = Object.values(cliente).join(" ").toLowerCase();
+      return testo.includes(ricerca.toLowerCase());
+    });
+  }, [clienti, ricerca]);
+
+
+
 
   const riepilogo = {
     aperti: lavori.filter((l) => !["Terminato", "Consegnato"].includes(l.stato)).length,
@@ -685,8 +800,7 @@ async function salvaCliente(e) {
     .join(" ")
     .toLowerCase();
 
-  return testo.includes(ricercaClienteLavoro.toLowerCase());
-});
+return testo.includes(ricerca.toLowerCase());});
 
   if (caricamento) {
     return (
@@ -723,9 +837,16 @@ async function salvaCliente(e) {
 
   return (
     <>
-      {preventivoDaStampare && <PreventivoStampabile preventivo={preventivoDaStampare} />}
-      {lavoroDaStampare && (
+      {preventivoDaStampare && (
+  <PreventivoStampabile preventivo={preventivoDaStampare} />
+)}
+
+{lavoroDaStampare && (
   <LavoroStampabile lavoro={lavoroDaStampare} />
+)}
+
+{rimessaggioDaStampare && (
+  <RimessaggioStampabile rimessaggio={rimessaggioDaStampare} />
 )}
 
       <div className="page">
@@ -748,38 +869,122 @@ async function salvaCliente(e) {
         </section>
 
         <div className="tabs">
-          <button className={vista === "lavori" ? "active" : ""} onClick={() => setVista("lavori")}>Lavori officina</button>
-          <button className={vista === "clienti" ? "active" : ""} onClick={() => setVista("clienti")}>Archivio clienti</button>
-          <button className={vista === "preventivi" ? "active" : ""} onClick={() => setVista("preventivi")}>Preventivi</button>
-        </div>
+  <button
+    className={vista === "lavori" ? "active" : ""}
+    onClick={() => setVista("lavori")}
+  >
+    Lavori officina
+  </button>
 
+  <button
+    className={vista === "clienti" ? "active" : ""}
+    onClick={() => setVista("clienti")}
+  >
+    Archivio clienti
+  </button>
+
+  <button
+    className={vista === "preventivi" ? "active" : ""}
+    onClick={() => setVista("preventivi")}
+  >
+    Preventivi
+  </button>
+  <button
+  className={vista === "rimessaggi" ? "active" : ""}
+  onClick={() => setVista("rimessaggi")}
+>
+  Rimessaggi
+</button>
+
+{vista === "lavori" && (
+  <>
+    <select
+      value={filtroStato}
+      onChange={(e) => setFiltroStato(e.target.value)}
+      style={{ marginLeft: "10px" }}
+    >
+      <option value="Tutti">Tutti</option>
+      <option value="In lavorazione">In lavorazione</option>
+      <option value="Terminato">Terminato</option>
+    </select>
+
+    <select
+      value={filtroPagamento}
+      onChange={(e) => setFiltroPagamento(e.target.value)}
+      style={{ marginLeft: "10px" }}
+    >
+      <option value="Tutti">Tutti pagamenti</option>
+      <option value="Non pagato">Non pagato</option>
+      <option value="Pagato">Pagato</option>
+      <option value="Fatturato">Fatturato</option>
+    </select>
+  </>
+)}
+
+</div>
+{vista === "rimessaggi" && (
+  <>
+    <div
+      style={{
+        marginLeft: "650px",   // regola il valore
+        display: "inline-flex",
+        gap: "10px",
+        alignItems: "center",
+      }}
+    >
+      <select
+        value={filtroPagamentoRimessaggi}
+        onChange={(e) =>
+          setFiltroPagamentoRimessaggi(e.target.value)
+        }
+      >
+        <option value="Tutti">Tutti</option>
+       <option value="Non pagato">Da pagare</option>
+        <option value="Pagato">Pagato</option>
+      </select>
+
+      <input
+        type="text"
+        placeholder="Cerca cliente, barca, motore o matricola..."
+        value={ricerca}
+        onChange={(e) => setRicerca(e.target.value)}
+        style={{
+          padding: "8px",
+          width: "320px",
+        }}
+      />
+    </div>
+  </>
+)}
         <main className="layout">
           {vista === "lavori" && (
-            <section className="panel">
-              <h2>Nuovo lavoro</h2>
-<form onSubmit={aggiungiLavoro} className="form">
+  <section className="panel">
+    <h2>Nuovo lavoro</h2>
 
-  {!form.cliente && (    <>
-      <label>
-        Cerca cliente registrato
+    <form onSubmit={aggiungiLavoro} className="form">
+    {!form.cliente && (
+  <label>
+    Cerca cliente registrato
 
-  <input
-    type="text"
-    placeholder="Scrivi nome, cognome, telefono, motore o matricola"
-    value={ricercaClienteLavoro}
-    onChange={(e) => setRicercaClienteLavoro(e.target.value)}
-  />
-</label>
+    <input
+      type="text"
+      list="clientiListLavori"
+      placeholder="Scrivi nome, telefono, motore o matricola"
+      value={ricercaClienteLavoro}
+      onChange={(e) => {
+        const valore = e.target.value;
 
-{ricercaClienteLavoro && (
-  <div className="clientSearchResults">
-    {clientiRicercatiLavoro.map((cliente) => (
-      <button
-        type="button"
-        key={cliente.firebaseId}
-        onClick={() => {
-  setForm({
-    ...form,
+        setRicercaClienteLavoro(valore);
+
+        const cliente = clientiDb.find((c) =>
+          `${c.cliente || ""} ${c.telefono || ""} ${c.barca || ""} ${c.motore || ""} ${c.matricola || ""}`
+            .toLowerCase()
+            .includes(valore.toLowerCase())
+        );
+
+        if (cliente && valore.trim().length > 1) {
+          setForm({
+            ...form,
             cliente: cliente.cliente || "",
             telefono: cliente.telefono || "",
             barca: cliente.barca || "",
@@ -788,134 +993,300 @@ async function salvaCliente(e) {
           });
 
           setRicercaClienteLavoro("");
-        }}
-      >
-        <strong>{cliente.cliente}</strong>
+        }
+      }}
+    />
 
-        <span>
-          {cliente.telefono || "Telefono non indicato"} ·{" "}
-          {cliente.motore || "Motore non indicato"}
-        </span>
-      </button>
-    ))}
-  </div>
+    <datalist id="clientiListLavori">
+      {clientiDb.map((cliente) => (
+        <option
+          key={cliente.firebaseId}
+          value={cliente.cliente}
+        />
+      ))}
+    </datalist>
+  </label>
 )}
-  </>
-)}
-<Input
-  label="Titolo lavoro"
-  value={form.titolo || ""}
-  onChange={(v) => setForm({ ...form, titolo: v })}
-/>
 
-                <Input label="Cliente *" value={form.cliente} onChange={(v) => setForm({ ...form, cliente: v })} />
-                <Input label="Telefono" value={form.telefono} onChange={(v) => setForm({ ...form, telefono: v })} />
-                <Input label="Imbarcazione" value={form.barca} onChange={(v) => setForm({ ...form, barca: v })} />
-                <Input label="Motore" value={form.motore} onChange={(v) => setForm({ ...form, motore: v })} />
-                <Input label="Matricola" value={form.matricola} onChange={(v) => setForm({ ...form, matricola: v })} />
-                <Textarea label="Lavoro richiesto *" value={form.lavoro} onChange={(v) => setForm({ ...form, lavoro: v })} />
+      <Input
+        label="Titolo lavoro"
+        value={form.titolo || ""}
+        onChange={(v) => setForm({ ...form, titolo: v })}
+      />
 
-                <div className="twoCols">
-                  <Select label="Stato" value={form.stato} options={stati} onChange={(v) => setForm({ ...form, stato: v })} />
-                                  </div>
+      <Input
+        label="Cliente *"
+        value={form.cliente || ""}
+        onChange={(v) => setForm({ ...form, cliente: v })}
+      />
 
-                <Input label="Tecnico" value={form.tecnico} onChange={(v) => setForm({ ...form, tecnico: v })} />
+      <Input
+        label="Telefono"
+        value={form.telefono || ""}
+        onChange={(v) => setForm({ ...form, telefono: v })}
+      />
 
-                <div className="twoCols">
-                  <Input label="Ingresso" type="date" value={form.ingresso} onChange={(v) => setForm({ ...form, ingresso: v })} />
-                  <Input label="Consegna" type="date" value={form.consegna} onChange={(v) => setForm({ ...form, consegna: v })} />
-                </div>
+      <Input
+        label="Imbarcazione"
+        value={form.barca || ""}
+        onChange={(v) => setForm({ ...form, barca: v })}
+      />
 
-                <Textarea
-  label="Ricambi"
-  value={form.ricambi}
+      <Input
+        label="Motore"
+        value={form.motore || ""}
+        onChange={(v) => setForm({ ...form, motore: v })}
+      />
+
+      <Input
+        label="Matricola"
+        value={form.matricola || ""}
+        onChange={(v) => setForm({ ...form, matricola: v })}
+      />
+
+      <Textarea
+        label="Lavoro richiesto *"
+        value={form.lavoro || ""}
+        onChange={(v) => setForm({ ...form, lavoro: v })}
+      />
+
+    <Textarea
+  label="Ricambi / materiali"
+  value={form.ricambi || ""}
   onChange={(v) => setForm({ ...form, ricambi: v })}
-  
 />
+
 <div className="twoCols">
   <Input
     label="Costo ricambi euro"
-    value={form.costoRicambi}
-    onChange={(v) => setForm({ ...form, costoRicambi: v })}
+    type="number"
+    value={form.costoRicambi || ""}
+    onChange={(v) =>
+      setForm({ ...form, costoRicambi: v })
+    }
   />
 
   <Input
     label="Ore manodopera"
-    value={form.oreManodopera}
-    onChange={(v) => setForm({ ...form, oreManodopera: v })}
+    type="number"
+    value={form.oreManodopera || ""}
+    onChange={(v) =>
+      setForm({ ...form, oreManodopera: v })
+    }
   />
 </div>
 
 <div className="twoCols">
   <Input
     label="Prezzo ora euro"
-    value={form.prezzoOra}
-    onChange={(v) => setForm({ ...form, prezzoOra: v })}
+    type="number"
+    value={form.prezzoOra || ""}
+    onChange={(v) =>
+      setForm({ ...form, prezzoOra: v })
+    }
   />
 
   <Input
     label="Altro euro"
-    value={form.altro}
-    onChange={(v) => setForm({ ...form, altro: v })}
+    type="number"
+    value={form.altro || ""}
+    onChange={(v) =>
+      setForm({ ...form, altro: v })
+    }
   />
 </div>
-                <Textarea label="Note" value={form.note} onChange={(v) => setForm({ ...form, note: v })} />
+<div className="twoCols">
+  <Input
+    label="Acconto euro"
+    type="number"
+    value={form.acconto || ""}
+    onChange={(v) =>
+      setForm({ ...form, acconto: v })
+    }
+  />
 
-                <button className="primary" type="submit">
-  {lavoroInModifica ? "Aggiorna lavoro" : "Aggiungi lavoro"}
-</button>
-              </form>
-            </section>
-            
-          )}
-          {vista === "clienti" && (
-  <section className="panel">
-    <h2>Nuovo cliente</h2>
+  <Input
+    label="Saldo euro"
+    value={String(
+      numero(form.costoRicambi) +
+      numero(form.oreManodopera) *
+        numero(form.prezzoOra) +
+      numero(form.altro) -
+      numero(form.acconto)
+    )}
+    onChange={() => {}}
+    readOnly
+  />
+</div>
+<div className="totalBox">
+  Totale lavoro:{" "}
+  <strong>
+    {euro(
+      numero(form.costoRicambi) +
+      numero(form.oreManodopera) *
+        numero(form.prezzoOra) +
+      numero(form.altro)
+    )}
+  </strong>
+</div>
 
-    <form onSubmit={salvaCliente} className="form">
+<Select
+  label="Stato"
+        value={form.stato || ""}
+        options={stati}
+        onChange={(v) => setForm({ ...form, stato: v })}
+      />
+      <Select
+  label="Stato amministrativo"
+  value={form.pagamento || "Non pagato"}
+  options={[
+    "Non pagato",
+    "Pagato",
+    "Fatturato"
+  ]}
+  onChange={(v) =>
+    setForm({ ...form, pagamento: v })
+  }
+/>
+
       <Input
-        label="Cliente"
-        value={formCliente.cliente}
-        onChange={(v) => setFormCliente({ ...formCliente, cliente: v })}
+        label="Tecnico"
+        value={form.tecnico || ""}
+        onChange={(v) => setForm({ ...form, tecnico: v })}
       />
 
-      <Input
-        label="Telefono"
-        value={formCliente.telefono}
-        onChange={(v) => setFormCliente({ ...formCliente, telefono: v })}
-      />
+      <div className="twoCols">
+        <Input
+          label="Ingresso"
+          type="date"
+          value={form.ingresso || ""}
+          onChange={(v) => setForm({ ...form, ingresso: v })}
+        />
 
-      <Input
-        label="Imbarcazione"
-        value={formCliente.barca}
-        onChange={(v) => setFormCliente({ ...formCliente, barca: v })}
-      />
-
-      <Input
-        label="Motore"
-        value={formCliente.motore}
-        onChange={(v) => setFormCliente({ ...formCliente, motore: v })}
-      />
-
-      <Input
-        label="Matricola"
-        value={formCliente.matricola}
-        onChange={(v) => setFormCliente({ ...formCliente, matricola: v })}
-      />
+        <Input
+          label="Consegna"
+          type="date"
+          value={form.consegna || ""}
+          onChange={(v) => setForm({ ...form, consegna: v })}
+        />
+      </div>
 
       <Textarea
         label="Note"
-        value={formCliente.note}
-        onChange={(v) => setFormCliente({ ...formCliente, note: v })}
+        value={form.note || ""}
+        onChange={(v) => setForm({ ...form, note: v })}
       />
 
       <button className="primary" type="submit">
-  {clienteInModifica ? "Aggiorna cliente" : "Salva cliente"}
-</button>
+        {lavoroInModifica ? "Aggiorna lavoro" : "Aggiungi lavoro"}
+      </button>
+
     </form>
   </section>
 )}
+          {vista === "lavori" && (
+  <div className="cards">
+    <input
+  type="text"
+  placeholder="Cerca cliente, lavoro, barca, motore o matricola..."
+  value={ricerca}
+  onChange={(e) => setRicerca(e.target.value)}
+  style={{
+    width: "100%",
+    marginBottom: "15px",
+    padding: "10px",
+  }}
+/>
+<div
+  style={{
+    maxHeight: "500px",
+    overflowY: "auto",
+    marginTop: "20px",
+  }}
+>
+  {lavoriFiltrati.map((lavoro) => (
+      <article
+        className="job lavoro"
+        key={lavoro.firebaseId || lavoro.id}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "10px",
+          }}
+        >
+          <div>
+            <strong>{lavoro.cliente}</strong>
 
+            <div style={{ fontSize: "14px", marginTop: "4px" }}>
+              {lavoro.titolo || "Lavoro officina"}
+            </div>
+
+            <div
+              style={{
+                fontSize: "13px",
+                color: "#666",
+              }}
+            >
+              Consegna: {formatData(lavoro.consegna)}
+            </div>
+            <div
+  style={{
+    fontSize: "13px",
+    fontWeight: "bold",
+    marginTop: "4px",
+    color:
+      lavoro.pagamento === "Pagato"
+        ? "green"
+        : lavoro.pagamento === "Fatturato"
+        ? "#0b5ed7"
+        : "#c62828",
+  }}
+>
+  {lavoro.pagamento || "Non pagato"}
+</div>
+          </div>
+
+          <div className="actions">
+  <button
+    className="actionBtn editBtn"
+    onClick={() => {
+      setForm({ ...lavoro });
+      setLavoroInModifica(lavoro.firebaseId);
+    }}
+  >
+    ✏️ Modifica
+  </button>
+
+  <button
+    className="actionBtn pdfBtn"
+    onClick={() => {
+      setLavoroDaStampare(lavoro);
+
+      setTimeout(() => {
+        window.print();
+      }, 300);
+    }}
+  >
+    📄 PDF
+  </button>
+
+  <button
+    type="button"
+    className="actionBtn deleteBtn"
+    onClick={() => eliminaLavoro(lavoro.firebaseId)}
+  >
+    🗑 Elimina
+  </button>
+</div>
+        </div>
+      </article>
+    ))}
+</div>
+  </div>
+)}
           {vista === "preventivi" && (
             <section className="panel">
               <h2>{preventivoInModifica ? "Modifica preventivo" : "Nuovo preventivo"}</h2>
@@ -929,44 +1300,44 @@ async function salvaCliente(e) {
                 
                 <label>
   Cerca cliente *
-
   <input
     type="text"
+    list="clientiListPreventivi"
     placeholder="Scrivi nome, cognome, telefono, motore o matricola"
     value={ricercaClienteLavoro}
-    onChange={(e) => setRicercaClienteLavoro(e.target.value)}
+    onChange={(e) => {
+      const valore = e.target.value;
+      setRicercaClienteLavoro(valore);
+
+      const cliente = clientiDb.find((c) =>
+        `${c.cliente || ""} ${c.telefono || ""} ${c.barca || ""} ${c.motore || ""} ${c.matricola || ""}`
+          .toLowerCase()
+          .includes(valore.toLowerCase())
+      );
+
+      if (cliente && valore.trim().length > 1) {
+        setFormPreventivo({
+          ...formPreventivo,
+          cliente: cliente.cliente || "",
+          telefono: cliente.telefono || "",
+          barca: cliente.barca || "",
+          motore: cliente.motore || "",
+          matricola: cliente.matricola || "",
+        });
+        setRicercaClienteLavoro("");
+      }
+    }}
   />
-</label>
 
-{ricercaClienteLavoro && (
-  <div className="clientSearchResults">
-    {clientiRicercatiLavoro.map((cliente) => (
-      <button
-        type="button"
+  <datalist id="clientiListPreventivi">
+    {clientiDb.map((cliente) => (
+      <option
         key={cliente.firebaseId}
-        onClick={() => {
-          setFormPreventivo({
-  ...formPreventivo,
-            cliente: cliente.cliente || "",
-            telefono: cliente.telefono || "",
-            barca: cliente.barca || "",
-            motore: cliente.motore || "",
-            matricola: cliente.matricola || "",
-          });
-
-          setRicercaClienteLavoro("");
-        }}
-      >
-        <strong>{cliente.cliente}</strong>
-
-        <span>
-          {cliente.telefono || "Telefono non indicato"} ·{" "}
-          {cliente.motore || "Motore non indicato"}
-        </span>
-      </button>
+        value={cliente.cliente}
+      />
     ))}
-  </div>
-)}
+  </datalist>
+</label>
 <Input
   label="Cliente *"
   value={formPreventivo.cliente}
@@ -1017,57 +1388,376 @@ async function salvaCliente(e) {
             </section>
           )}
 
-          <section className="content">
-            {vista !== "clienti" && (
-  <div className="filters">
+          {vista === "clienti" && (
+  <section className="panel">
+    <h2>Nuovo cliente</h2>
+
+    <form onSubmit={salvaCliente} className="form">
+      <Input
+        label="Cliente"
+        value={formCliente.cliente}
+        onChange={(v) => setFormCliente({ ...formCliente, cliente: v })}
+      />
+
+      <Input
+        label="Telefono"
+        value={formCliente.telefono}
+        onChange={(v) => setFormCliente({ ...formCliente, telefono: v })}
+      />
+
+      <Input
+        label="Imbarcazione"
+        value={formCliente.barca}
+        onChange={(v) => setFormCliente({ ...formCliente, barca: v })}
+      />
+
+      <Input
+        label="Motore"
+        value={formCliente.motore}
+        onChange={(v) => setFormCliente({ ...formCliente, motore: v })}
+      />
+
+      <Input
+        label="Matricola"
+        value={formCliente.matricola}
+        onChange={(v) => setFormCliente({ ...formCliente, matricola: v })}
+      />
+
+      <Textarea
+        label="Note"
+        value={formCliente.note}
+        onChange={(v) => setFormCliente({ ...formCliente, note: v })}
+      />
+
+      <button className="primary" type="submit">
+  {clienteInModifica ? "Aggiorna cliente" : "Salva cliente"}
+</button>
+    </form>
+  </section>
+)}
+{vista === "clienti" && (
+  <div className="cards">
+
     <input
-      placeholder="Cerca cliente, motore, matricola, lavoro, preventivo..."
+      type="text"
+      placeholder="Cerca cliente, telefono, barca, motore o matricola..."
       value={ricerca}
       onChange={(e) => setRicerca(e.target.value)}
+      style={{
+        width: "100%",
+        marginBottom: "15px",
+        padding: "10px",
+      }}
     />
 
-    {vista === "lavori" && (
-      <select value={filtroStato} onChange={(e) => setFiltroStato(e.target.value)}>
-        <option>Tutti</option>
-        {stati.map((s) => <option key={s}>{s}</option>)}
-      </select>
-    )}
+    {clientiRicercatiLavoro.map((cliente) => {
+      const lavoriCliente = lavori.filter(
+        (lavoro) => lavoro.cliente === cliente.cliente
+      );
+
+      const preventiviCliente = preventivi.filter(
+        (preventivo) => preventivo.cliente === cliente.cliente
+      );
+
+      return (
+        <article
+  className="job"
+  key={cliente.firebaseId}
+>
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: "10px",
+    }}
+  >
+    <div>
+      <strong>{cliente.cliente}</strong>
+
+      <div
+        style={{
+          fontSize: "13px",
+          color: "#666",
+          marginTop: "4px",
+        }}
+      >
+        {cliente.barca || "-"} | {cliente.motore || "-"}
+      </div>
+
+      <div
+        style={{
+          fontSize: "13px",
+          color: "#666",
+        }}
+      >
+        Lavori: {lavoriCliente.length} | Preventivi: {preventiviCliente.length}
+      </div>
+    </div>
+
+    <div className="clientActions">
+      <button
+        className="clientBtn editBtn"
+        onClick={() => modificaCliente(cliente)}
+      >
+        ✏️
+      </button>
+
+      <button
+        type="button"
+        className="clientBtn preventivoBtn"
+        onClick={() => {
+          setVista("preventivi");
+
+          setFormPreventivo({
+            ...nuovoPreventivoVuoto(),
+            cliente: cliente.cliente || "",
+            telefono: cliente.telefono || "",
+            barca: cliente.barca || "",
+            motore: cliente.motore || "",
+            matricola: cliente.matricola || "",
+          });
+        }}
+      >
+        ➕
+      </button>
+
+      <button
+        type="button"
+        className="clientBtn lavoroBtn"
+        onClick={() => {
+          setVista("lavori");
+
+          setForm({
+            ...nuovoLavoroVuoto(),
+            cliente: cliente.cliente || "",
+            telefono: cliente.telefono || "",
+            barca: cliente.barca || "",
+            motore: cliente.motore || "",
+            matricola: cliente.matricola || "",
+          });
+        }}
+      >
+        🔧
+      </button>
+    </div>
+  </div>
+</article>
+      );
+    })}
   </div>
 )}
+{vista === "rimessaggi" && (
+  <section className="panel">
+    <h2>Nuovo rimessaggio</h2>
 
-            {vista === "lavori" && (
-              <div className="cards">
-                {lavoriFiltrati.map((lavoro) => (
-                  <article className="job lavoro" key={lavoro.firebaseId || lavoro.id}>
-                    <div className="jobTop">
-                      <div>
-                        <span className="id">{lavoro.id}</span>
-                        <h3 className="titoloLavoro">
-  <strong>Titolo:</strong> {lavoro.titolo || "Lavoro officina"}
-</h3>
+    <form className="form">
 
-<p>
-  <strong>Cliente:</strong> {lavoro.cliente}
-</p>
+    <label>
+  Cerca cliente
 
-<p>{lavoro.telefono}</p>
-                      </div>
-                     <div className="actions">
-  <button
-  className="actionBtn editBtn"
-  onClick={() => {
-    setForm({ ...lavoro });
-    setLavoroInModifica(lavoro.firebaseId);
-  }}
+  <input
+    type="text"
+    list="clientiListRimessaggi"
+    placeholder="Nome cliente..."
+    value={form.cliente || ""}
+    onChange={(e) => {
+      const valore = e.target.value;
+
+      const cliente = clientiDb.find(
+        (c) => c.cliente === valore
+      );
+
+      if (cliente) {
+  setForm({
+    ...form,
+    cliente: cliente.cliente || "",
+    telefono: cliente.telefono || "",
+    matricola: cliente.matricola || "",
+    barca: cliente.barca || "",
+    motore: cliente.motore || "",
+  });
+} else {
+        setForm({
+          ...form,
+          cliente: valore,
+        });
+      }
+    }}
+  />
+
+  <datalist id="clientiListRimessaggi">
+    {clientiDb.map((cliente) => (
+      <option
+        key={cliente.firebaseId}
+        value={cliente.cliente}
+      />
+    ))}
+  </datalist>
+</label>
+
+      <Input
+        label="Imbarcazione"
+        value={form.barca || ""}
+        onChange={(v) => setForm({ ...form, barca: v })}
+      />
+
+      <Input
+        label="Motore"
+        value={form.motore || ""}
+        onChange={(v) => setForm({ ...form, motore: v })}
+      />
+
+      <div className="twoCols">
+        <Input
+          label="Data ingresso"
+          type="date"
+          value={form.ingresso || ""}
+          onChange={(v) => setForm({ ...form, ingresso: v })}
+        />
+
+        <Input
+          label="Data uscita"
+          type="date"
+          value={form.uscita || ""}
+          onChange={(v) => setForm({ ...form, uscita: v })}
+        />
+      </div>
+<Select
+  label="Copertura"
+  value={form.copertura || ""}
+  options={[
+    "Copertura termo",
+    "Copertura cliente",
+  ]}
+  onChange={(v) =>
+    setForm({ ...form, copertura: v })
+  }
+/>
+
+<Input
+  label="Prezzo rimessaggio euro"
+  value={form.prezzoRimessaggio || ""}
+  onChange={(v) =>
+    setForm({ ...form, prezzoRimessaggio: v })
+  }
+/>
+
+<Input
+  label="Acconto euro"
+  value={form.acconto || ""}
+  onChange={(v) =>
+    setForm({ ...form, acconto: v })
+  }
+/>
+
+<Input
+  label="Saldo euro"
+  value={
+    String(
+      numero(form.prezzoRimessaggio) -
+      numero(form.acconto)
+    )
+  }
+  onChange={() => {}}
+  readOnly
+/>
+<Select
+  label="Pagamento"
+  value={form.pagamento || ""}
+  options={[
+    "Da pagare",
+    "Pagato",
+  ]}
+  onChange={(v) =>
+    setForm({ ...form, pagamento: v })
+  }
+/>
+
+<Textarea
+  label="Note"
+  value={form.note || ""}
+  onChange={(v) =>
+    setForm({ ...form, note: v })
+  }
+/>
+
+      <button
+  className="primary"
+  type="button"
+  onClick={salvaRimessaggio}
 >
-  ✏️ Modifica
+  Salva rimessaggio
 </button>
 
+    </form>
+  </section>
+)}
+{vista === "rimessaggi" && (
+<>
+  
 
+  <div className="cards">
+
+  <div
+    style={{
+      maxHeight: "500px",
+      overflowY: "auto",
+      marginTop: "20px",
+    }}
+  >
+    {rimessaggiFiltrati.map((rimessaggio) => (
+  <article
+    className="job lavoro"
+    key={rimessaggio.firebaseId}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "10px",
+      }}
+    >
+      <div>
+        <strong>{rimessaggio.cliente}</strong>
+        
+        <div
+          style={{
+            fontSize: "13px",
+            color:
+              rimessaggio.pagamento === "Pagato"
+                ? "green"
+                : "red",
+          }}
+        >
+          {rimessaggio.pagamento || "Da pagare"}
+        </div>
+
+        <div
+          style={{
+            fontSize: "13px",
+            color: "#666",
+          }}
+        >
+          Uscita: {formatData(rimessaggio.uscita)}
+        </div>
+      </div>
+
+      <div className="actions">
+  <button
+    className="actionBtn editBtn"
+    onClick={() => {
+      setForm({ ...rimessaggio });
+      setRimessaggioInModifica(rimessaggio.firebaseId);
+    }}
+  >
+    ✏️ Modifica
+  </button>
 <button
   className="actionBtn pdfBtn"
   onClick={() => {
-    setLavoroDaStampare(lavoro);
+    setRimessaggioDaStampare(rimessaggio);
 
     setTimeout(() => {
       window.print();
@@ -1076,214 +1766,106 @@ async function salvaCliente(e) {
 >
   📄 PDF
 </button>
-
-<button
-  type="button"
-  className="actionBtn deleteBtn"
-  onClick={() => eliminaLavoro(lavoro.firebaseId)}
->
-  🗑 Elimina
-</button>
-</div>
-                    </div>
-
-                    <div className="badges">
-  
+  <button
+    type="button"
+    className="actionBtn deleteBtn"
+    onClick={() => eliminaRimessaggio(rimessaggio.firebaseId)}
+  >
+    🗑 Elimina
+  </button>
 </div>
 
-                    <div className="gridInfo">
-                      <p><strong>Barca:</strong> {lavoro.barca || "-"}</p>
-                      <p><strong>Motore:</strong> {lavoro.motore || "-"}</p>
-                      <p><strong>Matricola:</strong> {lavoro.matricola || "-"}</p>
-                      <p><strong>Tecnico:</strong> {lavoro.tecnico || "-"}</p>
-                      <p><strong>Ingresso:</strong> {formatData(lavoro.ingresso)}</p>
-                      <p><strong>Consegna:</strong> {formatData(lavoro.consegna)}</p>
-                    </div>
+    </div>
+    </article>
+))}
+  </div>
 
-                  
-                  
-                    {lavoro.note && <p><strong>Note:</strong> {lavoro.note}</p>}
-                                      </article>
-                ))}
-              </div>
-            )}
-
-
-                    
-                       
-
-    {vista === "clienti" && (
-  <>
-    <label className="clientSearchBox">
-      Cerca cliente
-
-      <input
-        type="text"
-        placeholder="Nome, telefono, motore, matricola..."
-        value={ricercaClienteLavoro}
-        onChange={(e) => setRicercaClienteLavoro(e.target.value)}
-      />
-    </label>
-
-   <div className="cards">
-  {clientiRicercatiLavoro.map((cliente) => {
-    const lavoriCliente = lavori.filter(
-      (lavoro) => lavoro.cliente === cliente.cliente
-    );
-
-    const preventiviCliente = preventivi.filter(
-      (preventivo) => preventivo.cliente === cliente.cliente
-    );
-
-    return (
-      <article className="job" key={cliente.firebaseId}>
-        <div className="jobTop">
-          <div>
-            <span className="id">CLIENTE</span>
-            <h3>{cliente.cliente}</h3>
-            <p>{cliente.telefono || "Telefono non indicato"}</p>
-          </div>
-
-          <div className="clientActions">
-            <button
-              className="clientBtn editBtn"
-              onClick={() => modificaCliente(cliente)}
-            >
-              ✏️ Modifica
-            </button>
-
-            <button
-              type="button"
-              className="clientBtn preventivoBtn"
-              onClick={() => {
-                setVista("preventivi");
-
-                setFormPreventivo({
-                  ...nuovoPreventivoVuoto(),
-                  cliente: cliente.cliente || "",
-                  telefono: cliente.telefono || "",
-                  barca: cliente.barca || "",
-                  motore: cliente.motore || "",
-                  matricola: cliente.matricola || "",
-                });
-              }}
-            >
-              ➕ Nuovo preventivo
-            </button>
-
-            <button
-              type="button"
-              className="clientBtn lavoroBtn"
-              onClick={() => {
-                setVista("lavori");
-
-                setForm({
-                  ...nuovoLavoroVuoto(),
-                  cliente: cliente.cliente || "",
-                  telefono: cliente.telefono || "",
-                  barca: cliente.barca || "",
-                  motore: cliente.motore || "",
-                  matricola: cliente.matricola || "",
-                });
-              }}
-            >
-              🔧 Nuovo lavoro
-            </button>
-          </div>
-        </div>
-
-        <div className="gridInfo">
-          <p><strong>Imbarcazione:</strong> {cliente.barca || "-"}</p>
-<p><strong>Motore:</strong> {cliente.motore || "-"}</p>
-
-<p><strong>Matricola:</strong> {cliente.matricola || "-"}</p>
-<p></p>
-
-<p><strong>Lavori:</strong> {lavoriCliente.length}</p>
-<p><strong>Preventivi:</strong> {preventiviCliente.length}</p>
-        </div>
-
-        {cliente.note && (
-          <p className="work">
-            <strong>Note:</strong> {cliente.note}
-          </p>
-        )}
-            </article>
-    );
-  })}
-</div>
+  </div>
   </>
 )}
-            {vista === "preventivi" && (
+{vista === "preventivi" && (
               <div className="cards">
+                <input
+  type="text"
+  placeholder="Cerca cliente, preventivo, barca, motore o matricola..."
+  value={ricerca}
+  onChange={(e) => setRicerca(e.target.value)}
+  style={{
+    width: "100%",
+    marginBottom: "15px",
+    padding: "10px",
+  }}
+/>
                 {preventiviFiltrati.map((preventivo) => (
                   <article className="job preventivo" key={preventivo.firebaseId || preventivo.id}>
                     <div className="jobTop">
-                      <div>
-                        <span className="id">{preventivo.id}</span>
-                        <h3 className="titoloPreventivo">
-  <strong>Titolo:</strong> {preventivo.titolo || "Preventivo"}
-</h3>
+  <div>
+    <strong>{preventivo.cliente}</strong>
 
-<p>
-  <strong>Cliente:</strong> {preventivo.cliente}
-</p>
+    <div
+      style={{
+        fontSize: "14px",
+        marginTop: "4px",
+      }}
+    >
+      {preventivo.titolo || "Preventivo"}
+    </div>
 
-<p>{preventivo.telefono}</p>
-                      </div>
-                      <div className="actions">
-                        <button className="actionBtn editBtn" onClick={() => modificaPreventivo(preventivo)}>
-  ✏️ Modifica
-</button>
+    <div
+      style={{
+        fontSize: "13px",
+        color: "#666",
+      }}
+    >
+      Totale: {euro(calcolaTotale(preventivo))}
+    </div>
 
-<button
-  className="actionBtn pdfBtn"
-  onClick={() => stampaPreventivo(preventivo)}
->
-  📄 PDF
-</button>
+    <div
+      style={{
+        fontSize: "13px",
+        color: "#666",
+      }}
+    >
+      Data: {formatData(preventivo.data)}
+    </div>
+  </div>
 
-<button
-  className="actionBtn lavoroBtn"
-  onClick={() => creaLavoroDaPreventivo(preventivo)}
->
-  🔧 Lavoro
-</button>
+  <div className="actions">
+    <button
+      className="actionBtn editBtn"
+      onClick={() => modificaPreventivo(preventivo)}
+    >
+      ✏️ Modifica
+    </button>
 
-<button
-  className="actionBtn deleteBtn"
-  onClick={() => eliminaPreventivo(preventivo.firebaseId)}
->
-  🗑 Elimina
-</button>
-                      </div>
-                    </div>
+    <button
+      className="actionBtn pdfBtn"
+      onClick={() => stampaPreventivo(preventivo)}
+    >
+      📄 PDF
+    </button>
 
-                    <div className="badges">
-                      <span>{preventivo.stato}</span>
-                      <span>Totale: {euro(calcolaTotale(preventivo))}</span>
-                    </div>
+    <button
+      className="actionBtn lavoroBtn"
+      onClick={() => creaLavoroDaPreventivo(preventivo)}
+    >
+      🔧 Lavoro
+    </button>
 
-                    <div className="gridInfo">
-                      <p><strong>Data:</strong> {formatData(preventivo.data)}</p>
-                      <p><strong>Barca:</strong> {preventivo.barca || "-"}</p>
-                      <p><strong>Motore:</strong> {preventivo.motore || "-"}</p>
-                      <p><strong>Matricola:</strong> {preventivo.matricola || "-"}</p>
-                      <p><strong>Ricambi euro:</strong> {euro(numero(preventivo.costoRicambi))}</p>
-                      <p><strong>Manodopera:</strong> {preventivo.oreManodopera || 0} h x {euro(numero(preventivo.prezzoOra))}</p>
-                    </div>
-
-                  
-                  
-                    {preventivo.note && <p><strong>Note:</strong> {preventivo.note}</p>}
-
-                    
+    <button
+      className="actionBtn deleteBtn"
+      onClick={() => eliminaPreventivo(preventivo.firebaseId)}
+    >
+      🗑 Elimina
+    </button>
+  </div>
+</div>
+{preventivo.note && <p><strong>Note:</strong> {preventivo.note}</p>}
                   </article>
                 ))}
               </div>
             )}
-          </section>
-        </main>
+         </main>
       </div>
     </>
   );
@@ -1291,7 +1873,6 @@ async function salvaCliente(e) {
 
 function PreventivoStampabile({ preventivo }) {
   const totale = calcolaTotale(preventivo);
-  const manodopera = numero(preventivo.oreManodopera) * numero(preventivo.prezzoOra);
 
   return (
     <div className="printArea">
@@ -1331,20 +1912,12 @@ function PreventivoStampabile({ preventivo }) {
         <p>{preventivo.descrizione || "-"}</p>
       </div>
 
-      <div className="printSection">
-        <h2>Ricambi / materiali</h2>
-        <p>{preventivo.ricambi || "-"}</p>
-      </div>
-
-      <div className="printSection">
-        <h2>Dettaglio economico</h2>
-        <div className="priceRows">
-          <div><span>Ricambi / materiali</span><strong>{euro(numero(preventivo.costoRicambi))}</strong></div>
-          <div><span>Manodopera ({preventivo.oreManodopera || 0} h x {euro(numero(preventivo.prezzoOra))})</span><strong>{euro(manodopera)}</strong></div>
-          <div><span>Altro</span><strong>{euro(numero(preventivo.altro))}</strong></div>
-          <div className="total"><span>Totale preventivo</span><strong>{euro(totale)}</strong></div>
-        </div>
-      </div>
+      <div className="priceRows">
+  <div className="total">
+    <span>Totale preventivo</span>
+    <strong>{euro(totale)}</strong>
+  </div>
+</div>
 
       {preventivo.note && (
         <div className="printSection">
@@ -1410,17 +1983,98 @@ function LavoroStampabile({ lavoro }) {
         <p>{lavoro.titolo || "-"}</p>
       </div>
 
-      <div className="printSection">
-        <h2>Lavoro richiesto</h2>
-        <p>{lavoro.lavoro || "-"}</p>
+     <div>
+  <h2 style={{ marginBottom: "12px" }}>
+    Lavoro richiesto
+  </h2>
+        <div
+  style={{
+    border: "1px solid #ccc",
+    borderRadius: "8px",
+    padding: "12px",
+    minHeight: "500px",
+    whiteSpace: "pre-wrap",
+  }}
+>
+  {lavoro.lavoro || "-"}
+</div>
       </div>
 
+      <div
+  className="printSection"
+  style={{ pageBreakBefore: "always" }}
+>
+  <h2>Ricambi / materiali</h2>
+  <div
+  style={{
+    padding: "12px",
+    minHeight: "320px",
+    whiteSpace: "pre-wrap",
+  }}
+>
+  {lavoro.ricambi || "-"}
+</div>
+</div>
       <div className="printSection">
-        <h2>Ricambi / materiali</h2>
-        <p>{lavoro.ricambi || "-"}</p>
-      </div>
-      <div className="printSection">
-  <h2>Dettaglio economico</h2>
+  <h2>Interventi eseguiti</h2>
+
+ <div
+  style={{
+    height: "400px",
+    marginTop: "10px",
+    marginBottom: "22px",
+  }}
+></div>
+
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      gap: "40px",
+    }}
+  >
+    <div style={{ flex: 1 }}>
+      <strong>Ore impiegate:</strong>
+
+      <div
+        style={{
+          borderBottom: "1px solid #111",
+          height: "30px",
+          marginTop: "10px",
+        }}
+      ></div>
+    </div>
+    <div style={{ marginTop: "30px" }}>
+  <strong>Data:</strong>
+
+  <div
+    style={{
+      borderBottom: "1px solid #111",
+      height: "30px",
+      marginTop: "10px",
+      width: "220px",
+    }}
+  ></div>
+</div>
+
+    <div style={{ flex: 1 }}>
+      <strong>Firma tecnico:</strong>
+
+      <div
+        style={{
+          borderBottom: "1px solid #111",
+          height: "30px",
+          marginTop: "10px",
+        }}
+      ></div>
+    </div>
+  </div>
+</div>
+      <div
+  className="printSection"
+  style={{ pageBreakBefore: "always" }}
+>
+  
 
   <div className="priceRows">
     <div>
@@ -1446,6 +2100,23 @@ function LavoroStampabile({ lavoro }) {
     </div>
 
     <div className="total">
+      <div>
+  <span>Acconto</span>
+  <strong>{euro(numero(lavoro.acconto))}</strong>
+</div>
+
+<div>
+  <span>Saldo</span>
+  <strong>
+    {euro(
+      numero(lavoro.costoRicambi) +
+      (parseFloat(lavoro.oreManodopera || 0)) *
+      (parseFloat(lavoro.prezzoOra || 0)) +
+      numero(lavoro.altro) -
+      numero(lavoro.acconto)
+    )}
+  </strong>
+</div>
   <span>Totale lavoro</span>
 
   <strong>
@@ -1485,7 +2156,148 @@ function LavoroStampabile({ lavoro }) {
     </div>
   );
 }
+function RimessaggioStampabile({ rimessaggio }) {
+  return (
+    <div className="printArea">
+      <div className="printHeader">
+        <div className="printLogoArea">
+          <img
+            src={logoZenith}
+            alt="Servizi Nautici Zenith"
+            className="printLogo"
+          />
 
+          <div>
+            <h1>Servizi Nautici Zenith</h1>
+            <p>Vendita e assistenza di motori e imbarcazioni</p>
+          </div>
+        </div>
+
+        <div className="printDocInfo">
+          <strong>Scheda rimessaggio</strong>
+          <span>{formatData(rimessaggio.ingresso)}</span>
+        </div>
+      </div>
+
+      <div className="printSection twoPrintCols">
+        <div>
+          <h2>Dati cliente</h2>
+
+          <p>
+            <strong>Cliente:</strong>{" "}
+            {rimessaggio.cliente || "-"}
+          </p>
+
+          <p>
+            <strong>Telefono:</strong>{" "}
+            {rimessaggio.telefono || "-"}
+          </p>
+        </div>
+
+        <div>
+          <h2>Imbarcazione</h2>
+
+          <p>
+            <strong>Barca:</strong>{" "}
+            {rimessaggio.barca || "-"}
+          </p>
+
+          <p>
+            <strong>Motore:</strong>{" "}
+            {rimessaggio.motore || "-"}
+          </p>
+
+          <p>
+            <strong>Matricola:</strong>{" "}
+            {rimessaggio.matricola || "-"}
+          </p>
+        </div>
+      </div>
+
+      <div className="printSection">
+        <h2>Dati rimessaggio</h2>
+
+        <p>
+          <strong>Ingresso:</strong>{" "}
+          {formatData(rimessaggio.ingresso)}
+        </p>
+
+        <p>
+          <strong>Uscita:</strong>{" "}
+          {formatData(rimessaggio.uscita)}
+        </p>
+
+        <p>
+          <strong>Copertura:</strong>{" "}
+          {rimessaggio.copertura || "-"}
+        </p>
+
+        <p>
+          <strong>Pagamento:</strong>{" "}
+          {rimessaggio.pagamento || "Da pagare"}
+        </p>
+      </div>
+
+      <div className="printSection">
+        <div className="priceRows">
+          <div>
+            <span>Prezzo rimessaggio</span>
+
+            <strong>
+              {euro(
+                numero(
+                  rimessaggio.prezzoRimessaggio
+                )
+              )}
+            </strong>
+          </div>
+
+          <div>
+            <span>Acconto</span>
+
+            <strong>
+              {euro(
+                numero(rimessaggio.acconto)
+              )}
+            </strong>
+          </div>
+
+          <div className="total">
+            <span>Saldo</span>
+
+            <strong>
+              {euro(
+                numero(
+                  rimessaggio.prezzoRimessaggio
+                ) -
+                  numero(rimessaggio.acconto)
+              )}
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      {rimessaggio.note && (
+        <div className="printSection">
+          <h2>Note</h2>
+          <p>{rimessaggio.note}</p>
+        </div>
+      )}
+
+      <div className="printFooter">
+        <div>
+          <strong>Firma cliente</strong>
+          <div className="signatureLine"></div>
+        </div>
+
+        <div>
+          <strong>Firma cantiere</strong>
+          <div className="signatureLine"></div>
+        </div>
+      </div>
+    </div>
+  );
+}
 function Input({ label, value, onChange, type = "text" }) {
   return (
     <label>
@@ -1499,7 +2311,11 @@ function Textarea({ label, value, onChange }) {
   return (
     <label>
       {label}
-      <textarea value={value} onChange={(e) => onChange(e.target.value)} rows="3" />
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={6}
+      />
     </label>
   );
 }
@@ -1520,10 +2336,13 @@ function numero(valore) {
 }
 
 function calcolaTotale(preventivo) {
-  const ricambi = numero(preventivo.costoRicambi);
-  const manodopera = numero(preventivo.oreManodopera) * numero(preventivo.prezzoOra);
+  const manodopera =
+    numero(preventivo.oreManodopera) *
+    numero(preventivo.prezzoOra);
+
   const altro = numero(preventivo.altro);
-  return ricambi + manodopera + altro;
+
+  return manodopera + altro;
 }
 
 function euro(valore) {
