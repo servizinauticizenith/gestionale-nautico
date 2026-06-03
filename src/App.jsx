@@ -88,6 +88,8 @@ const [clienteInModifica, setClienteInModifica] = useState(null);
   const [preventivoDaStampare, setPreventivoDaStampare] = useState(null);
   const [rimessaggioDaStampare, setRimessaggioDaStampare] = useState(null);
   const [lavoroDaStampare, setLavoroDaStampare] = useState(null);
+  const [stampaElencoLavori, setStampaElencoLavori] = useState(false);
+  const [stampaElencoRimessaggi, setStampaElencoRimessaggi] = useState(false);
   function modificaCliente(cliente) {
   setFormCliente({
     firebaseId: cliente.firebaseId || "",
@@ -845,7 +847,25 @@ return testo.includes(ricerca.toLowerCase());});
 {lavoroDaStampare && (
   <LavoroStampabile lavoro={lavoroDaStampare} />
 )}
-
+{stampaElencoLavori && (
+  <ElencoLavoriStampabile
+    lavori={[...lavori]
+      .filter((l) => l.stato === "In lavorazione")
+      .sort(
+        (a, b) =>
+          new Date(a.consegna) -
+          new Date(b.consegna)
+      )}
+  />
+)}
+{stampaElencoRimessaggi && (
+  <ElencoRimessaggiStampabile
+    rimessaggi={rimessaggi.filter((r) => {
+      if (filtroPagamentoRimessaggi === "Tutti") return true;
+      return r.pagamento === filtroPagamentoRimessaggi;
+    })}
+  />
+)}
 {rimessaggioDaStampare && (
   <RimessaggioStampabile rimessaggio={rimessaggioDaStampare} />
 )}
@@ -919,10 +939,23 @@ return testo.includes(ricerca.toLowerCase());});
       <option value="Pagato">Pagato</option>
       <option value="Fatturato">Fatturato</option>
     </select>
+
+    <button
+      style={{ marginLeft: "10px" }}
+      onClick={() => {
+        setStampaElencoLavori(true);
+
+        setTimeout(() => {
+          window.print();
+          setStampaElencoLavori(false);
+        }, 300);
+      }}
+    >
+      📄 PDF Lavori aperti
+    </button>
   </>
 )}
 
-</div>
 {vista === "rimessaggi" && (
   <>
     <div
@@ -934,29 +967,53 @@ return testo.includes(ricerca.toLowerCase());});
       }}
     >
       <select
-        value={filtroPagamentoRimessaggi}
-        onChange={(e) =>
-          setFiltroPagamentoRimessaggi(e.target.value)
-        }
-      >
-        <option value="Tutti">Tutti</option>
-       <option value="Non pagato">Da pagare</option>
-        <option value="Pagato">Pagato</option>
-      </select>
+  value={filtroPagamentoRimessaggi}
+  onChange={(e) =>
+    setFiltroPagamentoRimessaggi(e.target.value)
+  }
+>
+  <option value="Tutti">Tutti</option>
+  <option value="Non pagato">Da pagare</option>
+  <option value="Pagato">Pagato</option>
+</select>
 
-      <input
-        type="text"
-        placeholder="Cerca cliente, barca, motore o matricola..."
-        value={ricerca}
-        onChange={(e) => setRicerca(e.target.value)}
-        style={{
-          padding: "8px",
-          width: "320px",
-        }}
-      />
-    </div>
-  </>
+<button
+  style={{ marginLeft: "10px" }}
+  onClick={() => {
+    setStampaElencoRimessaggi(true);
+
+    setTimeout(() => {
+      window.print();
+      setStampaElencoRimessaggi(false);
+    }, 300);
+  }}
+>
+  📄 PDF Rimessaggi
+</button>
+
+</div>
+
+<div
+  style={{
+    marginTop: "10px",
+    display: "flex",
+    marginLeft: "650px",
+  }}
+>
+  <input
+    type="text"
+    placeholder="Cerca cliente, barca, motore o matricola..."
+    value={ricerca}
+    onChange={(e) => setRicerca(e.target.value)}
+    style={{
+      width: "320px",
+      padding: "8px",
+    }}
+  />
+</div>
+   </>
 )}
+</div>
         <main className="layout">
           {vista === "lavori" && (
   <section className="panel">
@@ -1199,7 +1256,9 @@ return testo.includes(ricerca.toLowerCase());});
 )}
           {vista === "lavori" && (
   <div className="cards">
-    <input
+
+
+<input
   type="text"
   placeholder="Cerca cliente, lavoro, barca, motore o matricola..."
   value={ricerca}
@@ -2169,6 +2228,91 @@ function LavoroStampabile({ lavoro }) {
     </div>
   );
 }
+function ElencoLavoriStampabile({ lavori }) {
+  const lavoriOrdinati = [...lavori].sort((a, b) => {
+    if (!a.consegna) return 1;
+    if (!b.consegna) return -1;
+
+    return new Date(a.consegna) - new Date(b.consegna);
+  });
+
+  return (
+    <div className="printArea">
+      <div className="printHeader">
+        <h1>Servizi Nautici Zenith</h1>
+        <h2>Elenco lavori aperti</h2>
+        <p>Ordinati per data di consegna</p>
+      </div>
+
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          marginTop: "20px",
+        }}
+      >
+        <thead>
+          <tr>
+            <th style={{ border: "1px solid #000", padding: "8px" }}>
+              Entrata
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "8px" }}>
+              Cliente
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "8px" }}>
+              Imbarcazione
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "8px" }}>
+              Telefono
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "8px" }}>
+              Consegna
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {lavoriOrdinati.map((l) => (
+            <tr key={l.firebaseId}>
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {formatData(l.ingresso)}
+              </td>
+
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {l.cliente}
+              </td>
+
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {l.barca}
+              </td>
+
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {l.telefono}
+              </td>
+
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {formatData(l.consegna)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div
+        style={{
+          marginTop: "20px",
+          fontWeight: "bold",
+        }}
+      >
+        Totale lavori aperti: {lavoriOrdinati.length}
+      </div>
+    </div>
+  );
+}
 function RimessaggioStampabile({ rimessaggio }) {
   return (
     <div className="printArea">
@@ -2307,6 +2451,72 @@ function RimessaggioStampabile({ rimessaggio }) {
           <strong>Firma cantiere</strong>
           <div className="signatureLine"></div>
         </div>
+      </div>
+    </div>
+  );
+}
+function ElencoRimessaggiStampabile({ rimessaggi }) {
+  return (
+    <div className="printArea">
+      <div className="printHeader">
+        <h1>Servizi Nautici Zenith</h1>
+        <h2>Elenco Rimessaggi</h2>
+      </div>
+
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          marginTop: "20px",
+        }}
+      >
+        <thead>
+  <tr>
+    <th style={{ border: "1px solid #000", padding: "8px" }}>
+      Cliente
+    </th>
+    <th style={{ border: "1px solid #000", padding: "8px" }}>
+      Imbarcazione
+    </th>
+    <th style={{ border: "1px solid #000", padding: "8px" }}>
+      Telefono
+    </th>
+    <th style={{ border: "1px solid #000", padding: "8px" }}>
+      Pagamento
+    </th>
+  </tr>
+</thead>
+
+        <tbody>
+         {rimessaggi.map((r) => (
+  <tr key={r.firebaseId}>
+    <td style={{ border: "1px solid #000", padding: "6px" }}>
+      {r.cliente}
+    </td>
+
+    <td style={{ border: "1px solid #000", padding: "6px" }}>
+      {r.barca}
+    </td>
+
+    <td style={{ border: "1px solid #000", padding: "6px" }}>
+      {r.telefono}
+    </td>
+
+    <td style={{ border: "1px solid #000", padding: "6px" }}>
+      {r.pagamento}
+    </td>
+  </tr>
+))}
+        </tbody>
+      </table>
+
+      <div
+        style={{
+          marginTop: "20px",
+          fontWeight: "bold",
+        }}
+      >
+        Totale rimessaggi: {rimessaggi.length}
       </div>
     </div>
   );
