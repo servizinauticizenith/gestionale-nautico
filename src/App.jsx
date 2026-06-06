@@ -601,32 +601,8 @@ async function eliminaPreventivo(firebaseId) {
 }
 
   function compilaPreventivoDaLavoro(lavoro) {
-    async function creaLavoroDaPreventivo(preventivo) {
-  if (!confirm("Vuoi trasformare questo preventivo in un lavoro?")) return;
+ }
 
-  const nuovoLavoro = {
-    ...nuovoLavoroVuoto(),
-    cliente: preventivo.cliente || "",
-    telefono: preventivo.telefono || "",
-    barca: preventivo.barca || "",
-    motore: preventivo.motore || "",
-    matricola: preventivo.matricola || "",
-    lavoro: preventivo.descrizione || "",
-    ricambi: preventivo.ricambi || "",
-    note: preventivo.note || "",
-    stato: "In lavorazione",
-    ingresso: new Date().toISOString().slice(0, 10),
-  };
-
-  
-}
-  async function creaLavoroDaPreventivo(preventivo) {
-  if (!confirm("Vuoi trasformare questo preventivo in un lavoro?")) return;
-
-  if (!preventivo.firebaseId) {
-    alert("Errore: ID preventivo mancante. Il lavoro è stato bloccato per evitare duplicati.");
-    return;
-  }
 
   const nuovoLavoro = {
     ...nuovoLavoroVuoto(),
