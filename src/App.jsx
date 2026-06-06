@@ -2044,15 +2044,18 @@ function LavoroStampabile({ lavoro }) {
 </div>
 </div>
       <div className="printSection">
-  <h2>Interventi eseguiti</h2>
+ <h2>Interventi eseguiti</h2>
 
- <div
+<div
   style={{
-    height: "400px",
+    minHeight: "120px",
     marginTop: "10px",
     marginBottom: "22px",
+    whiteSpace: "pre-wrap",
   }}
-></div>
+>
+  {lavoro.interventiEseguiti || ""}
+</div>
 
   <div
     style={{
