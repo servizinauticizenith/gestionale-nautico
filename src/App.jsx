@@ -601,42 +601,20 @@ async function eliminaPreventivo(firebaseId) {
 }
 
   function compilaPreventivoDaLavoro(lavoro) {
- }
+  setVista("preventivi");
+  setPreventivoInModifica(null);
 
-
-  const nuovoLavoro = {
-    ...nuovoLavoroVuoto(),
-    cliente: preventivo.cliente || "",
-    telefono: preventivo.telefono || "",
-    barca: preventivo.barca || "",
-    motore: preventivo.motore || "",
-    matricola: preventivo.matricola || "",
-    lavoro: preventivo.descrizione || "",
-    ricambi: preventivo.ricambi || "",
-    note: preventivo.note || "",
-    stato: "In lavorazione",
-    ingresso: new Date().toISOString().slice(0, 10),
-  };
-
-  await addDoc(collection(db, "lavori"), nuovoLavoro);
-
-  await deleteDoc(doc(db, "preventivi", preventivo.firebaseId));
-
-  setVista("lavori");
+  setFormPreventivo({
+    ...nuovoPreventivoVuoto(),
+    cliente: lavoro.cliente || "",
+    telefono: lavoro.telefono || "",
+    barca: lavoro.barca || "",
+    motore: lavoro.motore || "",
+    matricola: lavoro.matricola || "",
+    descrizione: lavoro.lavoro || "",
+    note: lavoro.note || "",
+  });
 }
-    setVista("preventivi");
-    setPreventivoInModifica(null);
-    setFormPreventivo({
-      ...nuovoPreventivoVuoto(),
-      cliente: lavoro.cliente || "",
-      telefono: lavoro.telefono || "",
-      barca: lavoro.barca || "",
-      motore: lavoro.motore || "",
-      matricola: lavoro.matricola || "",
-      descrizione: lavoro.lavoro || "",
-      note: lavoro.note || "",
-    });
-  }
   async function creaLavoroDaPreventivo(preventivo) {
   if (!confirm("Vuoi trasformare questo preventivo in un lavoro?")) return;
 
@@ -1806,6 +1784,7 @@ return testo.includes(ricerca.toLowerCase());});
 <button
   className="actionBtn pdfBtn"
   onClick={() => {
+    setLavoroDaStampare(null);
     setRimessaggioDaStampare(rimessaggio);
 
     setTimeout(() => {
