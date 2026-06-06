@@ -169,11 +169,12 @@ const stopRimessaggi = onSnapshot(
       setClientiDb(dati);
     });
 
-    return () => {
-      stopLavori();
-      stopPreventivi();
-      stopClienti();
-    };
+   return () => {
+  stopLavori();
+  stopPreventivi();
+  stopClienti();
+  stopRimessaggi();
+};
   }, [utente]);
 
   async function accedi(e) {
