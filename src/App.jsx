@@ -31,7 +31,7 @@ function nuovoLavoroVuoto() {
     ricambi: "",
     costoRicambi: "",
     oreManodopera: "",
-    prezzoOra: "45",
+    prezzoOra: "60",
     altro: "",
     acconto: "",
     pagamento: "Non pagato",   // ← AGGIUNGI QUESTA RIGA
@@ -738,7 +738,6 @@ async function eliminaPreventivo(firebaseId) {
 
 
 
-
   const riepilogo = {
     aperti: lavori.filter((l) => !["Terminato", "Consegnato"].includes(l.stato)).length,
     urgenti: lavori.filter((l) => ["Alta", "Urgente"].includes(l.priorita)).length,
@@ -1080,7 +1079,6 @@ return testo.includes(ricerca.toLowerCase());});
   onChange={(v) => setForm({ ...form, ricambi: v })}
 />
 
-
 <div className="twoCols">
   <Input
     label="Costo ricambi euro"
@@ -1211,7 +1209,6 @@ return testo.includes(ricerca.toLowerCase());});
 )}
           {vista === "lavori" && (
   <div className="cards">
-
 
 <input
   type="text"
@@ -2048,7 +2045,7 @@ function LavoroStampabile({ lavoro }) {
 
 <div
   style={{
-    minHeight: "120px",
+    minHeight: "500px",
     marginTop: "10px",
     marginBottom: "22px",
     whiteSpace: "pre-wrap",
@@ -2056,56 +2053,52 @@ function LavoroStampabile({ lavoro }) {
 >
   {lavoro.interventiEseguiti || ""}
 </div>
-
-  <div
-    style={{
-      display: "flex",
-      justifyContent: "space-between",
-      gap: "40px",
-    }}
-  >
-    <div style={{ flex: 1 }}>
-      <strong>Ore impiegate:</strong>
-
-      <div
-        style={{
-          borderBottom: "1px solid #111",
-          height: "30px",
-          marginTop: "10px",
-        }}
-      ></div>
-    </div>
-    <div style={{ marginTop: "30px" }}>
-  <strong>Data:</strong>
-
-  <div
-    style={{
-      borderBottom: "1px solid #111",
-      height: "30px",
-      marginTop: "10px",
-      width: "220px",
-    }}
-  ></div>
 </div>
 
-    <div style={{ flex: 1 }}>
-      <strong>Firma tecnico:</strong>
+<div
+  className="printSection"
+  style={{
+    pageBreakBefore: "always",
+    paddingTop: "35px",
+  }}
+>
+<div className="printHeader">
+  <div className="printLogoArea">
+    <img
+      src={logoZenith}
+      alt="Servizi Nautici Zenith"
+      className="printLogo"
+    />
 
-      <div
-        style={{
-          borderBottom: "1px solid #111",
-          height: "30px",
-          marginTop: "10px",
-        }}
-      ></div>
+    <div>
+      <h1>Servizi Nautici Zenith</h1>
+      <p>Vendita e assistenza di motori e imbarcazioni</p>
     </div>
   </div>
+
+  <div className="printDocInfo">
+    <strong>Scheda lavoro</strong>
+    <span>{lavoro.id}</span>
+    <span>{formatData(lavoro.ingresso)}</span>
+  </div>
 </div>
-      <div
-  className="printSection"
-  style={{ pageBreakBefore: "always" }}
->
-  
+
+<div className="printSection twoPrintCols">
+  <div>
+    <h2>Dati cliente</h2>
+    <p><strong>Cliente:</strong> {lavoro.cliente || "-"}</p>
+    <p><strong>Telefono:</strong> {lavoro.telefono || "-"}</p>
+  </div>
+
+  <div>
+    <h2>Imbarcazione</h2>
+    <p><strong>Barca:</strong> {lavoro.barca || "-"}</p>
+    <p><strong>Motore:</strong> {lavoro.motore || "-"}</p>
+    <p><strong>Matricola:</strong> {lavoro.matricola || "-"}</p>
+  </div>
+</div>
+
+ <div style={{ height: "50px" }}></div>
 
   <div className="priceRows">
     <div>
@@ -2130,34 +2123,56 @@ function LavoroStampabile({ lavoro }) {
       <strong>{euro(numero(lavoro.altro))}</strong>
     </div>
 
-    <div className="total">
-      <div>
-  <span>Acconto</span>
-  <strong>{euro(numero(lavoro.acconto))}</strong>
-</div>
+    <div
+  className="total"
+  style={{
+    display: "block",
+    textAlign: "center",
+  }}
+>
+  <div
+    style={{
+      textAlign: "center",
+      marginBottom: "18px",
+    }}
+  >
+    <span>Totale lavoro</span>
+    <br />
+    <strong style={{ fontSize: "20px" }}>
+      {euro(
+        numero(lavoro.costoRicambi) +
+          (parseFloat(lavoro.oreManodopera || 0)) *
+            (parseFloat(lavoro.prezzoOra || 0)) +
+          numero(lavoro.altro)
+      )}
+    </strong>
+  </div>
 
-<div>
-  <span>Saldo</span>
-  <strong>
-    {euro(
-      numero(lavoro.costoRicambi) +
-      (parseFloat(lavoro.oreManodopera || 0)) *
-      (parseFloat(lavoro.prezzoOra || 0)) +
-      numero(lavoro.altro) -
-      numero(lavoro.acconto)
-    )}
-  </strong>
-</div>
-  <span>Totale lavoro</span>
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      gap: "80px",
+    }}
+  >
+    <div>
+      <span>Acconto:&nbsp;</span>
+      <strong>{euro(numero(lavoro.acconto))}</strong>
+    </div>
 
-  <strong>
-    {euro(
-      numero(lavoro.costoRicambi) +
-      (parseFloat(lavoro.oreManodopera || 0)) *
-      (parseFloat(lavoro.prezzoOra || 0)) +
-      numero(lavoro.altro)
-    )}
-  </strong>
+    <div>
+      <span>Saldo:&nbsp;</span>
+      <strong>
+        {euro(
+          numero(lavoro.costoRicambi) +
+            (parseFloat(lavoro.oreManodopera || 0)) *
+              (parseFloat(lavoro.prezzoOra || 0)) +
+            numero(lavoro.altro) -
+            numero(lavoro.acconto)
+        )}
+      </strong>
+    </div>
+  </div>
 </div>
   </div>
 </div>
@@ -2169,7 +2184,12 @@ function LavoroStampabile({ lavoro }) {
         </div>
       )}
 
-      <div className="printFooter">
+      <div
+  className="printFooter"
+  style={{
+    marginTop: "220px",
+  }}
+>
         <div>
           <strong>Firma cliente</strong>
           <div className="signatureLine"></div>
@@ -2538,3 +2558,5 @@ function formatData(data) {
   if (!data) return "-";
   return new Date(data).toLocaleDateString("it-IT");
 }
+
+
