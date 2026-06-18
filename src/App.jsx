@@ -69,7 +69,9 @@ export default function App() {
   const [lavoroInModifica, setLavoroInModifica] = useState(null);
   const [rimessaggioInModifica, setRimessaggioInModifica] = useState(null);
   const [formPreventivo, setFormPreventivo] = useState(nuovoPreventivoVuoto());
+  const [ricercaClientePreventivo, setRicercaClientePreventivo] = useState("");
   const [formCliente, setFormCliente] = useState({
+    
   cliente: "",
   telefono: "",
   barca: "",
@@ -323,15 +325,33 @@ async function salvaRimessaggio() {
 
     alert("Lavoro eliminato");
   } catch (errore) {
-    console.error(
-      "Errore eliminazione lavoro:",
-      errore
-    );
+    console.error("Errore eliminazione lavoro:", errore);
 
     alert(
       "Errore durante eliminazione lavoro: " +
-      errore.message
+        errore.message
     );
+  }
+}
+
+async function eliminaCliente(firebaseId) {
+  if (!firebaseId) {
+    alert("ID cliente mancante");
+    return;
+  }
+
+  const conferma = window.confirm(
+    "Vuoi eliminare questo cliente dall'archivio?"
+  );
+
+  if (!conferma) return;
+
+  try {
+    await deleteDoc(doc(db, "clienti", firebaseId));
+    alert("Cliente eliminato");
+  } catch (errore) {
+    console.error("Errore eliminazione cliente:", errore);
+    alert("Errore eliminazione cliente: " + errore.message);
   }
 }
 
@@ -395,7 +415,14 @@ async function eliminaPreventivo(firebaseId) {
     setPreventivoInModifica(null);
     setFormPreventivo(nuovoPreventivoVuoto());
   }
-
+function pulisciHtml(testo) {
+  return String(testo || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
  function stampaPreventivo(preventivo) {
   const totale = calcolaTotale(preventivo);
   const manodopera = numero(preventivo.oreManodopera) * numero(preventivo.prezzoOra);
@@ -498,7 +525,7 @@ async function eliminaPreventivo(firebaseId) {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 40px;
-            margin-top: 45px;
+            margin-top: 150px;
           }
 
           .signatureLine {
@@ -507,10 +534,14 @@ async function eliminaPreventivo(firebaseId) {
           }
 
           .small {
-            margin-top: 30px;
-            font-size: 12px;
-            color: #4b5563;
-          }
+  margin-top: 30px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.pageBreak {
+  page-break-before: always;
+}
         </style>
       </head>
 
@@ -547,31 +578,102 @@ async function eliminaPreventivo(firebaseId) {
         </div>
 
         <div class="section">
-  <h2>Descrizione</h2>
+ <h2 style="text-align: center;">Descrizione</h2>
 
   <div
     style="
-      height: 300px;
-      white-space: pre-wrap;
-      padding-top: 10px;
+      min-height: 220px;
+white-space: pre-wrap;
+padding-top: 10px;
     "
   >
     ${preventivo.descrizione || "-"}
   </div>
 </div>
+<div class="section">
+ <h2 style="text-align: center;">Ricambi</h2>
 
-        <div class="section">
-          
-          <div class="priceRows">
-            
-            <div class="total"><span>Totale preventivo</span><strong>${euro(totale)}</strong></div>
-          </div>
-        </div>
+  <div
+  style="
+    min-height: 350px;
+    white-space: pre-wrap;
+    padding-top: 10px;
+  "
+>
+  ${preventivo.ricambi || "-"}
+</div>
+</div>
 
-        <div class="section">
-          <h2>Note</h2>
-          <p>${preventivo.note || "-"}</p>
-        </div>
+        <div class="section pageBreak">
+  <div class="header">
+    <div class="logoArea">
+      <img src="${logoZenith}" class="logo" />
+      <div>
+        <h1>Servizi Nautici Zenith</h1>
+        <p>Vendita e assistenza di motori e imbarcazioni</p>
+      </div>
+    </div>
+
+    <div class="docInfo">
+      <strong>Preventivo</strong>
+      <span>${preventivo.id || "-"}</span>
+      <span>${formatData(preventivo.data)}</span>
+    </div>
+  </div>
+
+  <div class="section twoCols" style="margin-bottom: 70px;">
+    <div>
+      <h2>Dati cliente</h2>
+      <p><strong>Cliente:</strong> ${preventivo.cliente || "-"}</p>
+      <p><strong>Telefono:</strong> ${preventivo.telefono || "-"}</p>
+    </div>
+
+    <div>
+      <h2>Imbarcazione</h2>
+      <p><strong>Barca:</strong> ${preventivo.barca || "-"}</p>
+      <p><strong>Motore:</strong> ${preventivo.motore || "-"}</p>
+      <p><strong>Matricola:</strong> ${preventivo.matricola || "-"}</p>
+    </div>
+  </div>
+
+  <h2>Dettaglio costi</h2>
+
+  <div class="priceRows">
+    <div>
+      <span>Ricambi</span>
+      <strong>${euro(preventivo.costoRicambi || 0)}</strong>
+    </div>
+
+    <div>
+      <span>Manodopera (${preventivo.oreManodopera || 0} h × ${euro(preventivo.prezzoOra || 0)})</span>
+      <strong>${euro(manodopera)}</strong>
+    </div>
+
+    <div>
+      <span>Altro</span>
+      <strong>${euro(preventivo.altro || 0)}</strong>
+    </div>
+
+    <div class="total">
+      <span>Totale preventivo</span>
+      <strong>${euro(totale)}</strong>
+    </div>
+  </div>
+</div>
+
+       <div class="section">
+  <h2>Note</h2>
+
+  <div
+    style="
+      min-height: 80px;
+      white-space: pre-wrap;
+      padding-top: 10px;
+    "
+  >
+    ${preventivo.note || "-"}
+  </div>
+</div>
 
         <div class="footer">
           <div>
@@ -988,11 +1090,9 @@ return testo.includes(ricerca.toLowerCase());});
 
         setRicercaClienteLavoro(valore);
 
-        const cliente = clientiDb.find((c) =>
-          `${c.cliente || ""} ${c.telefono || ""} ${c.barca || ""} ${c.motore || ""} ${c.matricola || ""}`
-            .toLowerCase()
-            .includes(valore.toLowerCase())
-        );
+       const cliente = clientiDb.find((c) =>
+  (c.cliente || "").toLowerCase() === valore.toLowerCase()
+);
 
         if (cliente && valore.trim().length > 1) {
           setForm({
@@ -1328,29 +1428,28 @@ return testo.includes(ricerca.toLowerCase());});
     type="text"
     list="clientiListPreventivi"
     placeholder="Scrivi nome, cognome, telefono, motore o matricola"
-    value={ricercaClienteLavoro}
+    value={ricercaClientePreventivo}
     onChange={(e) => {
-      const valore = e.target.value;
-      setRicercaClienteLavoro(valore);
+  const valore = e.target.value;
+  setRicercaClientePreventivo(valore);
 
-      const cliente = clientiDb.find((c) =>
-        `${c.cliente || ""} ${c.telefono || ""} ${c.barca || ""} ${c.motore || ""} ${c.matricola || ""}`
-          .toLowerCase()
-          .includes(valore.toLowerCase())
-      );
+  const cliente = clientiDb.find((c) =>
+    `${c.cliente || ""} ${c.telefono || ""} ${c.barca || ""} ${c.motore || ""} ${c.matricola || ""}`
+      .toLowerCase()
+      .includes(valore.toLowerCase())
+  );
 
-      if (cliente && valore.trim().length > 1) {
-        setFormPreventivo({
-          ...formPreventivo,
-          cliente: cliente.cliente || "",
-          telefono: cliente.telefono || "",
-          barca: cliente.barca || "",
-          motore: cliente.motore || "",
-          matricola: cliente.matricola || "",
-        });
-        setRicercaClienteLavoro("");
-      }
-    }}
+  if (cliente && valore.trim().length > 1) {
+    setFormPreventivo((prev) => ({
+      ...prev,
+      cliente: cliente.cliente || "",
+      telefono: cliente.telefono || "",
+      barca: cliente.barca || "",
+      motore: cliente.motore || "",
+      matricola: cliente.matricola || "",
+    }));
+  }
+}}
   />
 
   <datalist id="clientiListPreventivi">
@@ -1563,6 +1662,15 @@ return testo.includes(ricerca.toLowerCase());});
         }}
       >
         🔧
+          
+      </button>
+
+      <button
+        type="button"
+        className="clientBtn deleteBtn"
+        onClick={() => eliminaCliente(cliente.firebaseId)}
+      >
+        🗑️
       </button>
     </div>
   </div>
@@ -1936,6 +2044,7 @@ function PreventivoStampabile({ preventivo }) {
         <h2>Descrizione lavori</h2>
         <p>{preventivo.descrizione || "-"}</p>
       </div>
+      
 
       <div className="priceRows">
   <div className="total">
