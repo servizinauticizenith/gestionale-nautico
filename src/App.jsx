@@ -1201,7 +1201,7 @@ return testo.includes(ricerca.toLowerCase());});
 
 <div className="twoCols">
   <Input
-    label="Prezzo ora euro"
+    label="Costo ora euro"
     type="number"
     value={form.prezzoOra || ""}
     onChange={(v) =>
@@ -1210,7 +1210,7 @@ return testo.includes(ricerca.toLowerCase());});
   />
 
   <Input
-    label="Altro euro"
+    label="Rimessaggio euro"
     type="number"
     value={form.altro || ""}
     onChange={(v) =>
