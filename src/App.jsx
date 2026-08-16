@@ -29,6 +29,7 @@ function nuovoLavoroVuoto() {
     ingresso: new Date().toISOString().slice(0, 10),
     consegna: "",
     ricambi: "",
+    ricambiDettaglio: [],
     costoRicambi: "",
     oreManodopera: "",
     prezzoOra: "60",
@@ -85,6 +86,12 @@ const [clienteInModifica, setClienteInModifica] = useState(null);
   const [ricercaClienteLavoro, setRicercaClienteLavoro] = useState("");
   const [filtroStato, setFiltroStato] = useState("Tutti");
   const [filtroPagamento, setFiltroPagamento] = useState("Tutti");
+  const [filtroAnnoLavori, setFiltroAnnoLavori] = useState(
+  new Date().getFullYear().toString()
+);
+const [filtroAnnoRimessaggi, setFiltroAnnoRimessaggi] = useState(
+  new Date().getFullYear().toString()
+);
   const [filtroPagamentoRimessaggi, setFiltroPagamentoRimessaggi] = useState("Tutti");
   const [vista, setVista] = useState("lavori");
   const [preventivoDaStampare, setPreventivoDaStampare] = useState(null);
@@ -234,8 +241,20 @@ async function salvaCliente(e) {
     return;
   }
 
-  const datiLavoro = { ...form };
-  delete datiLavoro.firebaseId;
+  const totaleRicambi = (form.ricambiDettaglio || []).reduce(
+  (totale, ricambio) =>
+    totale +
+    numero(ricambio.quantita) *
+      numero(ricambio.prezzo),
+  0
+);
+
+const datiLavoro = {
+  ...form,
+  costoRicambi: String(totaleRicambi),
+};
+
+delete datiLavoro.firebaseId;
 
   if (lavoroInModifica) {
     await updateDoc(doc(db, "lavori", lavoroInModifica), datiLavoro);
@@ -803,9 +822,28 @@ padding-top: 10px;
       filtroPagamento === "Tutti" ||
       pagamentoLavoro === filtroPagamento;
 
-    return matchRicerca && matchStato && matchPagamento;
+    const annoLavoro = lavoro.ingresso
+      ? new Date(lavoro.ingresso).getFullYear().toString()
+      : "";
+
+    const matchAnno =
+      filtroAnnoLavori === "Tutti" ||
+      annoLavoro === filtroAnnoLavori;
+
+    return (
+      matchRicerca &&
+      matchStato &&
+      matchPagamento &&
+      matchAnno
+    );
   });
-}, [lavori, ricerca, filtroStato, filtroPagamento]);
+}, [
+  lavori,
+  ricerca,
+  filtroStato,
+  filtroPagamento,
+  filtroAnnoLavori,
+]);
   
 
   const preventiviFiltrati = useMemo(() => {
@@ -827,9 +865,22 @@ padding-top: 10px;
       filtroPagamentoRimessaggi === "Tutti" ||
       (r.pagamento || "") === filtroPagamentoRimessaggi;
 
-    return matchRicerca && matchPagamento;
+    const annoRimessaggio = r.ingresso
+      ? new Date(r.ingresso).getFullYear().toString()
+      : "";
+
+    const matchAnno =
+      filtroAnnoRimessaggi === "Tutti" ||
+      annoRimessaggio === filtroAnnoRimessaggi;
+
+    return matchRicerca && matchPagamento && matchAnno;
   });
-}, [rimessaggi, filtroPagamentoRimessaggi, ricerca]);
+}, [
+  rimessaggi,
+  filtroPagamentoRimessaggi,
+  filtroAnnoRimessaggi,
+  ricerca,
+]);
    
   const clientiFiltrati = useMemo(() => {
     return clienti.filter((cliente) => {
@@ -976,6 +1027,17 @@ return testo.includes(ricerca.toLowerCase());});
 {vista === "lavori" && (
   <>
     <select
+      value={filtroAnnoLavori}
+      onChange={(e) => setFiltroAnnoLavori(e.target.value)}
+      style={{ marginLeft: "10px" }}
+    >
+      <option value="Tutti">Tutti gli anni</option>
+      <option value="2026">2026</option>
+      <option value="2025">2025</option>
+      <option value="2024">2024</option>
+    </select>
+
+    <select
       value={filtroStato}
       onChange={(e) => setFiltroStato(e.target.value)}
       style={{ marginLeft: "10px" }}
@@ -1021,9 +1083,24 @@ return testo.includes(ricerca.toLowerCase());});
         gap: "10px",
         alignItems: "center",
       }}
-    >
+        >
       <select
-  value={filtroPagamentoRimessaggi}
+        value={filtroAnnoRimessaggi}
+        onChange={(e) =>
+          setFiltroAnnoRimessaggi(e.target.value)
+        }
+      >
+        <option value="Tutti">Tutti gli anni</option>
+        <option value="2026">2026</option>
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+      </select>
+
+      <select
+        value={filtroPagamentoRimessaggi}
+        onChange={(e) =>
+          setFiltroPagamentoRimessaggi(e.target.value)
+        }
   onChange={(e) =>
     setFiltroPagamentoRimessaggi(e.target.value)
   }
@@ -1173,21 +1250,145 @@ return testo.includes(ricerca.toLowerCase());});
   }
 />
 
-    <Textarea
-  label="Ricambi / materiali"
-  value={form.ricambi || ""}
-  onChange={(v) => setForm({ ...form, ricambi: v })}
-/>
+    <div
+  style={{
+    border: "1px solid #d1d5db",
+    borderRadius: "10px",
+    padding: "14px",
+    marginBottom: "16px",
+  }}
+>
+  <strong>Ricambi / materiali</strong>
+
+  {(form.ricambiDettaglio || []).map((ricambio, index) => (
+    <div
+      key={index}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "2fr 90px 120px 120px 45px",
+        gap: "8px",
+        alignItems: "center",
+        marginTop: "10px",
+      }}
+    >
+      <input
+        type="text"
+        placeholder="Descrizione ricambio"
+        value={ricambio.descrizione || ""}
+        onChange={(e) => {
+          const nuovi = [...(form.ricambiDettaglio || [])];
+          nuovi[index] = {
+            ...nuovi[index],
+            descrizione: e.target.value,
+          };
+
+          setForm({
+            ...form,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+      />
+
+      <input
+        type="number"
+        min="1"
+        placeholder="Qtà"
+        value={ricambio.quantita || ""}
+        onChange={(e) => {
+          const nuovi = [...(form.ricambiDettaglio || [])];
+          nuovi[index] = {
+            ...nuovi[index],
+            quantita: e.target.value,
+          };
+
+          setForm({
+            ...form,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+      />
+
+      <input
+        type="number"
+        step="0.01"
+        placeholder="Prezzo €"
+        value={ricambio.prezzo || ""}
+        onChange={(e) => {
+          const nuovi = [...(form.ricambiDettaglio || [])];
+          nuovi[index] = {
+            ...nuovi[index],
+            prezzo: e.target.value,
+          };
+
+          setForm({
+            ...form,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+      />
+
+      <strong>
+        {euro(
+          numero(ricambio.quantita) *
+            numero(ricambio.prezzo)
+        )}
+      </strong>
+
+      <button
+        type="button"
+        onClick={() => {
+          const nuovi = (form.ricambiDettaglio || []).filter(
+            (_, i) => i !== index
+          );
+
+          setForm({
+            ...form,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+      >
+        🗑
+      </button>
+    </div>
+  ))}
+
+  <button
+    type="button"
+    style={{ marginTop: "12px" }}
+    onClick={() =>
+      setForm({
+        ...form,
+        ricambiDettaglio: [
+          ...(form.ricambiDettaglio || []),
+          {
+            descrizione: "",
+            quantita: 1,
+            prezzo: "",
+          },
+        ],
+      })
+    }
+  >
+    + Aggiungi ricambio
+  </button>
+</div>
 
 <div className="twoCols">
   <Input
-    label="Costo ricambi euro"
-    type="number"
-    value={form.costoRicambi || ""}
-    onChange={(v) =>
-      setForm({ ...form, costoRicambi: v })
-    }
-  />
+  label="Costo ricambi euro"
+  type="number"
+  value={String(
+    (form.ricambiDettaglio || []).reduce(
+      (totale, ricambio) =>
+        totale +
+        numero(ricambio.quantita) *
+          numero(ricambio.prezzo),
+      0
+    )
+  )}
+  onChange={() => {}}
+  readOnly
+/>
 
   <Input
     label="Ore manodopera"
@@ -1329,84 +1530,86 @@ return testo.includes(ricerca.toLowerCase());});
   }}
 >
   {lavoriFiltrati.map((lavoro) => (
-      <article
-        className="job lavoro"
-        key={lavoro.firebaseId || lavoro.id}
+  <article
+    className="job lavoro"
+    key={lavoro.firebaseId || lavoro.id}
+    style={{
+      padding: "10px 14px",
+      marginBottom: "8px",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "12px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "18px",
+          minWidth: 0,
+          flex: 1,
+        }}
       >
-        <div
+        <strong
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "10px",
+            fontSize: "15px",
+            whiteSpace: "nowrap",
           }}
         >
-          <div>
-            <strong>{lavoro.cliente}</strong>
+          {lavoro.cliente}
+        </strong>
 
-            <div style={{ fontSize: "14px", marginTop: "4px" }}>
-              {lavoro.titolo || "Lavoro officina"}
-            </div>
+        <span
+          style={{
+            fontSize: "13px",
+            color: "#666",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Consegna: {formatData(lavoro.consegna)}
+        </span>
+      </div>
 
-            <div
-              style={{
-                fontSize: "13px",
-                color: "#666",
-              }}
-            >
-              Consegna: {formatData(lavoro.consegna)}
-            </div>
-            <div
-  style={{
-    fontSize: "13px",
-    fontWeight: "bold",
-    marginTop: "4px",
-    color:
-      lavoro.pagamento === "Pagato"
-        ? "green"
-        : lavoro.pagamento === "Fatturato"
-        ? "#0b5ed7"
-        : "#c62828",
-  }}
->
-  {lavoro.pagamento || "Non pagato"}
-</div>
-          </div>
+      <div className="actions">
+        <button
+          className="actionBtn editBtn"
+          onClick={() => {
+            setForm({ ...lavoro });
+            setLavoroInModifica(lavoro.firebaseId);
+          }}
+        >
+          ✏️ Modifica
+        </button>
 
-          <div className="actions">
-  <button
-    className="actionBtn editBtn"
-    onClick={() => {
-      setForm({ ...lavoro });
-      setLavoroInModifica(lavoro.firebaseId);
-    }}
-  >
-    ✏️ Modifica
-  </button>
+        <button
+          className="actionBtn pdfBtn"
+          onClick={() => {
+            setLavoroDaStampare(lavoro);
 
-  <button
-    className="actionBtn pdfBtn"
-    onClick={() => {
-      setLavoroDaStampare(lavoro);
+            setTimeout(() => {
+              window.print();
+            }, 300);
+          }}
+        >
+          📄 PDF
+        </button>
 
-      setTimeout(() => {
-        window.print();
-      }, 300);
-    }}
-  >
-    📄 PDF
-  </button>
-
-  <button
-    type="button"
-    className="actionBtn deleteBtn"
-    onClick={() => eliminaLavoro(lavoro.firebaseId)}
-  >
-    🗑 Elimina
-  </button>
-</div>
-        </div>
-      </article>
+        <button
+          type="button"
+          className="actionBtn deleteBtn"
+          onClick={() => eliminaLavoro(lavoro.firebaseId)}
+        >
+          🗑 Elimina
+        </button>
+      </div>
+    </div>
+  </article>
+))}
     ))}
 </div>
   </div>
@@ -1842,21 +2045,42 @@ return testo.includes(ricerca.toLowerCase());});
   <article
     className="job lavoro"
     key={rimessaggio.firebaseId}
+    style={{
+      padding: "10px 14px",
+      marginBottom: "8px",
+    }}
   >
     <div
       style={{
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        gap: "10px",
+        gap: "12px",
       }}
     >
-      <div>
-        <strong>{rimessaggio.cliente}</strong>
-        
-        <div
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "18px",
+          minWidth: 0,
+          flex: 1,
+        }}
+      >
+        <strong
+          style={{
+            fontSize: "15px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {rimessaggio.cliente}
+        </strong>
+
+        <span
           style={{
             fontSize: "13px",
+            fontWeight: "bold",
+            whiteSpace: "nowrap",
             color:
               rimessaggio.pagamento === "Pagato"
                 ? "green"
@@ -1864,52 +2088,56 @@ return testo.includes(ricerca.toLowerCase());});
           }}
         >
           {rimessaggio.pagamento || "Da pagare"}
-        </div>
+        </span>
 
-        <div
+        <span
           style={{
             fontSize: "13px",
             color: "#666",
+            whiteSpace: "nowrap",
           }}
         >
           Uscita: {formatData(rimessaggio.uscita)}
-        </div>
+        </span>
       </div>
 
       <div className="actions">
-  <button
-    className="actionBtn editBtn"
-    onClick={() => {
-      setForm({ ...rimessaggio });
-      setRimessaggioInModifica(rimessaggio.firebaseId);
-    }}
-  >
-    ✏️ Modifica
-  </button>
-<button
-  className="actionBtn pdfBtn"
-  onClick={() => {
-    setLavoroDaStampare(null);
-    setRimessaggioDaStampare(rimessaggio);
+        <button
+          className="actionBtn editBtn"
+          onClick={() => {
+            setForm({ ...rimessaggio });
+            setRimessaggioInModifica(rimessaggio.firebaseId);
+          }}
+        >
+          ✏️ Modifica
+        </button>
 
-    setTimeout(() => {
-      window.print();
-    }, 300);
-  }}
->
-  📄 PDF
-</button>
-  <button
-    type="button"
-    className="actionBtn deleteBtn"
-    onClick={() => eliminaRimessaggio(rimessaggio.firebaseId)}
-  >
-    🗑 Elimina
-  </button>
-</div>
+        <button
+          className="actionBtn pdfBtn"
+          onClick={() => {
+            setLavoroDaStampare(null);
+            setRimessaggioDaStampare(rimessaggio);
 
+            setTimeout(() => {
+              window.print();
+            }, 300);
+          }}
+        >
+          📄 PDF
+        </button>
+
+        <button
+          type="button"
+          className="actionBtn deleteBtn"
+          onClick={() =>
+            eliminaRimessaggio(rimessaggio.firebaseId)
+          }
+        >
+          🗑 Elimina
+        </button>
+      </div>
     </div>
-    </article>
+  </article>
 ))}
   </div>
 
@@ -2128,6 +2356,7 @@ function LavoroStampabile({ lavoro }) {
     padding: "12px",
     minHeight: "500px",
     whiteSpace: "pre-wrap",
+    textAlign: "left",
   }}
 >
   {lavoro.lavoro || "-"}
@@ -2139,15 +2368,143 @@ function LavoroStampabile({ lavoro }) {
   style={{ pageBreakBefore: "always" }}
 >
   <h2>Ricambi / materiali</h2>
+
+{(lavoro.ricambiDettaglio || []).length > 0 ? (
+  <div style={{ marginTop: "12px" }}>
+    <table
+      style={{
+        width: "100%",
+        borderCollapse: "collapse",
+        fontSize: "14px",
+      }}
+    >
+      <thead>
+        <tr>
+          <th
+            style={{
+              textAlign: "left",
+              borderBottom: "1px solid #999",
+              padding: "8px",
+            }}
+          >
+            Descrizione
+          </th>
+
+          <th
+            style={{
+              textAlign: "center",
+              borderBottom: "1px solid #999",
+              padding: "8px",
+              width: "70px",
+            }}
+          >
+            Qtà
+          </th>
+
+          <th
+            style={{
+              textAlign: "right",
+              borderBottom: "1px solid #999",
+              padding: "8px",
+              width: "120px",
+            }}
+          >
+            Prezzo
+          </th>
+
+          <th
+            style={{
+              textAlign: "right",
+              borderBottom: "1px solid #999",
+              padding: "8px",
+              width: "120px",
+            }}
+          >
+            Totale
+          </th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {lavoro.ricambiDettaglio.map((ricambio, index) => (
+          <tr key={index}>
+            <td
+              style={{
+                padding: "8px",
+                borderBottom: "1px solid #ddd",
+              }}
+            >
+              {ricambio.descrizione || "-"}
+            </td>
+
+            <td
+              style={{
+                padding: "8px",
+                textAlign: "center",
+                borderBottom: "1px solid #ddd",
+              }}
+            >
+              {ricambio.quantita || 0}
+            </td>
+
+            <td
+              style={{
+                padding: "8px",
+                textAlign: "right",
+                borderBottom: "1px solid #ddd",
+              }}
+            >
+              {euro(numero(ricambio.prezzo))}
+            </td>
+
+            <td
+              style={{
+                padding: "8px",
+                textAlign: "right",
+                borderBottom: "1px solid #ddd",
+              }}
+            >
+              {euro(
+                numero(ricambio.quantita) *
+                  numero(ricambio.prezzo)
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+
+    <div
+      style={{
+        textAlign: "right",
+        marginTop: "14px",
+        fontWeight: "bold",
+      }}
+    >
+      Totale ricambi:{" "}
+      {euro(
+        lavoro.ricambiDettaglio.reduce(
+          (totale, ricambio) =>
+            totale +
+            numero(ricambio.quantita) *
+              numero(ricambio.prezzo),
+          0
+        )
+      )}
+    </div>
+  </div>
+) : (
   <div
-  style={{
-    padding: "12px",
-    minHeight: "320px",
-    whiteSpace: "pre-wrap",
-  }}
->
-  {lavoro.ricambi || "-"}
-</div>
+    style={{
+      padding: "12px",
+      minHeight: "320px",
+      whiteSpace: "pre-wrap",
+      textAlign: "left",
+    }}
+  >
+    {lavoro.ricambi || "-"}
+  </div>
+)}
 </div>
       <div className="printSection">
  <h2>Interventi eseguiti</h2>
@@ -2158,6 +2515,7 @@ function LavoroStampabile({ lavoro }) {
     marginTop: "10px",
     marginBottom: "22px",
     whiteSpace: "pre-wrap",
+    textAlign: "left",
   }}
 >
   {lavoro.interventiEseguiti || ""}
