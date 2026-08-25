@@ -1547,14 +1547,15 @@ return testo.includes(ricerca.toLowerCase());});
       }}
     >
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "18px",
-          minWidth: 0,
-          flex: 1,
-        }}
-      >
+  style={{
+    display: "grid",
+    gridTemplateColumns: "220px 1fr 150px",
+    alignItems: "center",
+    gap: "18px",
+    minWidth: 0,
+    flex: 1,
+  }}
+>
         <strong
           style={{
             fontSize: "15px",
@@ -1566,9 +1567,25 @@ return testo.includes(ricerca.toLowerCase());});
 
         <span
           style={{
+            fontSize: "14px",
+            color: "#333",
+            fontWeight: "500",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            flex: 1,
+minWidth: 0,
+          }}
+        >
+          {lavoro.titolo || "Senza titolo"}
+        </span>
+
+        <span
+          style={{
             fontSize: "13px",
             color: "#666",
             whiteSpace: "nowrap",
+            marginLeft: "auto",
           }}
         >
           Consegna: {formatData(lavoro.consegna)}
@@ -2575,7 +2592,7 @@ function LavoroStampabile({ lavoro }) {
 
     <div>
       <span>
-        Manodopera ({lavoro.oreManodopera || 0} h x {euro(numero(lavoro.prezzoOra))})
+        <span>Manodopera</span>
       </span>
       <strong>
         {euro(
@@ -2586,7 +2603,7 @@ function LavoroStampabile({ lavoro }) {
     </div>
 
     <div>
-      <span>Altro</span>
+      <span>Rimessaggio</span>
       <strong>{euro(numero(lavoro.altro))}</strong>
     </div>
 

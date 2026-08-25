@@ -195,7 +195,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  width: auto;
 }
 
 .job {
@@ -623,8 +625,8 @@ body {
 /* layout equilibrato */
 
 .panel {
-  width: 620px !important;
-  min-width: 620px !important;
+  width: 820px !important;
+  min-width: 820px !important;
 }
 
 .content {
