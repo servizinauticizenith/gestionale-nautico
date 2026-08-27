@@ -861,9 +861,18 @@ padding-top: 10px;
         .toLowerCase()
         .includes(ricerca.toLowerCase());
 
-    const matchPagamento =
-      filtroPagamentoRimessaggi === "Tutti" ||
-      (r.pagamento || "") === filtroPagamentoRimessaggi;
+    const pagamentoRimessaggio = r.pagamento || "Da pagare";
+
+const matchPagamento =
+  filtroPagamentoRimessaggi === "Tutti" ||
+  (
+    filtroPagamentoRimessaggi === "Da pagare" &&
+    (
+      pagamentoRimessaggio === "Da pagare" ||
+      pagamentoRimessaggio === "Non pagato"
+    )
+  ) ||
+  pagamentoRimessaggio === filtroPagamentoRimessaggi;
 
     const annoRimessaggio = r.ingresso
       ? new Date(r.ingresso).getFullYear().toString()
@@ -892,11 +901,59 @@ padding-top: 10px;
 
 
   const riepilogo = {
-    aperti: lavori.filter((l) => !["Terminato", "Consegnato"].includes(l.stato)).length,
-    urgenti: lavori.filter((l) => ["Alta", "Urgente"].includes(l.priorita)).length,
-    attesaRicambi: lavori.filter((l) => l.stato === "Attesa ricambi").length,
-    preventivi: preventivi.length,
-  };
+  aperti: lavori.filter(
+    (l) => !["Terminato", "Consegnato"].includes(l.stato)
+  ).length,
+
+  urgenti: lavori.filter(
+    (l) => ["Alta", "Urgente"].includes(l.priorita)
+  ).length,
+
+  attesaRicambi: lavori.filter(
+    (l) => l.stato === "Attesa ricambi"
+  ).length,
+  rimessaggiDaIncassare: rimessaggi.filter(
+  (r) =>
+    r.pagamento === "Da pagare" ||
+    r.pagamento === "Non pagato" ||
+    !r.pagamento
+).length,
+totaleRimessaggiDaIncassare: rimessaggi
+  .filter(
+    (r) =>
+      r.pagamento === "Da pagare" ||
+      r.pagamento === "Non pagato" ||
+      !r.pagamento
+  )
+  .reduce((totale, r) => {
+    const saldo =
+      numero(r.prezzoRimessaggio) -
+      numero(r.acconto);
+
+    return totale + Math.max(0, saldo);
+  }, 0),
+
+  preventivi: preventivi.length,
+
+  daIncassare: lavori.filter(
+    (l) => (l.pagamento || "Non pagato") === "Non pagato"
+  ).length,
+  totaleDaIncassare: lavori
+  .filter(
+    (l) => (l.pagamento || "Non pagato") === "Non pagato"
+  )
+  .reduce((totale, l) => {
+    const totaleLavoro =
+      numero(l.costoRicambi) +
+      numero(l.oreManodopera) * numero(l.prezzoOra) +
+      numero(l.altro);
+
+    const saldo =
+      totaleLavoro - numero(l.acconto);
+
+    return totale + Math.max(0, saldo);
+  }, 0),
+};
 
   const totaleFormPreventivo = calcolaTotale(formPreventivo);
   const clientiRicercatiLavoro = clientiDb.filter((cliente) => {
@@ -968,8 +1025,28 @@ return testo.includes(ricerca.toLowerCase());});
 {stampaElencoRimessaggi && (
   <ElencoRimessaggiStampabile
     rimessaggi={rimessaggi.filter((r) => {
-      if (filtroPagamentoRimessaggi === "Tutti") return true;
-      return r.pagamento === filtroPagamentoRimessaggi;
+      const pagamento = r.pagamento || "Da pagare";
+
+      const matchPagamento =
+        filtroPagamentoRimessaggi === "Tutti" ||
+        (
+          filtroPagamentoRimessaggi === "Da pagare" &&
+          (
+            pagamento === "Da pagare" ||
+            pagamento === "Non pagato"
+          )
+        ) ||
+        pagamento === filtroPagamentoRimessaggi;
+
+      const annoRimessaggio = r.ingresso
+        ? new Date(r.ingresso).getFullYear().toString()
+        : "";
+
+      const matchAnno =
+        filtroAnnoRimessaggi === "Tutti" ||
+        annoRimessaggio === filtroAnnoRimessaggi;
+
+      return matchPagamento && matchAnno;
     })}
   />
 )}
@@ -991,8 +1068,56 @@ return testo.includes(ricerca.toLowerCase());});
 
         <section className="stats">
           <div className="stat"><span>Lavori aperti</span><strong>{riepilogo.aperti}</strong></div>
-          <div className="stat"><span>Priorità alta</span><strong>{riepilogo.urgenti}</strong></div>
-          <div className="stat"><span>Attesa ricambi</span><strong>{riepilogo.attesaRicambi}</strong></div>
+                   <div
+  className="stat"
+  onClick={() => {
+    setVista("lavori");
+    setFiltroPagamento("Non pagato");
+    setFiltroAnnoLavori("Tutti");
+    setRicerca("");
+  }}
+  style={{ cursor: "pointer" }}
+>
+  <span>Lavori da incassare</span>
+
+  <strong>{riepilogo.daIncassare}</strong>
+
+  <div
+    style={{
+      marginTop: "6px",
+      fontSize: "14px",
+      color: "#64748b",
+      fontWeight: "600",
+    }}
+  >
+    Totale: {euro(riepilogo.totaleDaIncassare)}
+  </div>
+</div>
+<div
+  className="stat"
+  onClick={() => {
+  setVista("rimessaggi");
+  setFiltroPagamentoRimessaggi("Da pagare");
+  setFiltroAnnoRimessaggi("Tutti");
+  setRicerca("");
+}}
+  style={{ cursor: "pointer" }}
+>
+  <span>Rimessaggi da incassare</span>
+
+<strong>{riepilogo.rimessaggiDaIncassare}</strong>
+
+<div
+  style={{
+    marginTop: "6px",
+    fontSize: "14px",
+    color: "#64748b",
+    fontWeight: "600",
+  }}
+>
+  Totale: {euro(riepilogo.totaleRimessaggiDaIncassare)}
+</div>
+</div>
           <div className="stat"><span>Preventivi</span><strong>{riepilogo.preventivi}</strong></div>
         </section>
 
@@ -1097,17 +1222,15 @@ return testo.includes(ricerca.toLowerCase());});
       </select>
 
       <select
-        value={filtroPagamentoRimessaggi}
-        onChange={(e) =>
-          setFiltroPagamentoRimessaggi(e.target.value)
-        }
+  value={filtroPagamentoRimessaggi}
   onChange={(e) =>
     setFiltroPagamentoRimessaggi(e.target.value)
   }
 >
   <option value="Tutti">Tutti</option>
-  <option value="Non pagato">Da pagare</option>
+  <option value="Da pagare">Da pagare</option>
   <option value="Pagato">Pagato</option>
+  <option value="Fatturato">Fatturato</option>
 </select>
 
 <button
@@ -1549,9 +1672,9 @@ return testo.includes(ricerca.toLowerCase());});
       <div
   style={{
     display: "grid",
-    gridTemplateColumns: "220px 1fr 150px",
+    gridTemplateColumns: "170px 150px 80px 95px 135px",
     alignItems: "center",
-    gap: "18px",
+    gap: "8px",
     minWidth: 0,
     flex: 1,
   }}
@@ -1566,30 +1689,64 @@ return testo.includes(ricerca.toLowerCase());});
         </strong>
 
         <span
-          style={{
-            fontSize: "14px",
-            color: "#333",
-            fontWeight: "500",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            flex: 1,
-minWidth: 0,
-          }}
-        >
-          {lavoro.titolo || "Senza titolo"}
-        </span>
+  style={{
+    fontSize: "14px",
+    color: "#333",
+    fontWeight: "500",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    flex: 1,
+    minWidth: 0,
+  }}
+>
+  {lavoro.titolo || "Senza titolo"}
+</span>
 
-        <span
-          style={{
-            fontSize: "13px",
-            color: "#666",
-            whiteSpace: "nowrap",
-            marginLeft: "auto",
-          }}
-        >
-          Consegna: {formatData(lavoro.consegna)}
-        </span>
+<span
+  style={{
+    fontSize: "13px",
+    fontWeight: "700",
+    whiteSpace: "nowrap",
+    color:
+      lavoro.pagamento === "Pagato"
+        ? "green"
+        : lavoro.pagamento === "Fatturato"
+        ? "#2563eb"
+        : "red",
+  }}
+>
+  {lavoro.pagamento || "Non pagato"}
+</span>
+<span
+  style={{
+    fontSize: "13px",
+    fontWeight: "700",
+    whiteSpace: "nowrap",
+    color: "#111827",
+  }}
+>
+  {euro(
+    Math.max(
+      0,
+      numero(lavoro.costoRicambi) +
+        numero(lavoro.oreManodopera) * numero(lavoro.prezzoOra) +
+        numero(lavoro.altro) -
+        numero(lavoro.acconto)
+    )
+  )}
+</span>
+
+<span
+  style={{
+    fontSize: "13px",
+    color: "#666",
+    whiteSpace: "nowrap",
+    marginLeft: "auto",
+  }}
+>
+  Consegna: {formatData(lavoro.consegna)}
+</span>
       </div>
 
       <div className="actions">
@@ -2020,6 +2177,7 @@ minWidth: 0,
   options={[
     "Da pagare",
     "Pagato",
+    "Fatturato",
   ]}
   onChange={(v) =>
     setForm({ ...form, pagamento: v })
@@ -2076,14 +2234,15 @@ minWidth: 0,
       }}
     >
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "18px",
-          minWidth: 0,
-          flex: 1,
-        }}
-      >
+  style={{
+    display: "grid",
+    gridTemplateColumns: "180px 95px 95px 135px",
+    alignItems: "center",
+    columnGap: "8px",
+    minWidth: 0,
+    flex: 1,
+  }}
+>
         <strong
           style={{
             fontSize: "15px",
@@ -2099,21 +2258,40 @@ minWidth: 0,
             fontWeight: "bold",
             whiteSpace: "nowrap",
             color:
-              rimessaggio.pagamento === "Pagato"
-                ? "green"
-                : "red",
+  rimessaggio.pagamento === "Pagato"
+    ? "green"
+    : rimessaggio.pagamento === "Fatturato"
+    ? "#2563eb"
+    : "red",
           }}
         >
           {rimessaggio.pagamento || "Da pagare"}
-        </span>
+</span>
 
-        <span
-          style={{
-            fontSize: "13px",
-            color: "#666",
-            whiteSpace: "nowrap",
-          }}
-        >
+<span
+  style={{
+    fontSize: "13px",
+    fontWeight: "700",
+    whiteSpace: "nowrap",
+    color: "#111827",
+  }}
+>
+  {euro(
+    Math.max(
+      0,
+      numero(rimessaggio.prezzoRimessaggio) -
+        numero(rimessaggio.acconto)
+    )
+  )}
+</span>
+
+<span
+  style={{
+    fontSize: "13px",
+    color: "#666",
+    whiteSpace: "nowrap",
+  }}
+>
           Uscita: {formatData(rimessaggio.uscita)}
         </span>
       </div>
