@@ -450,6 +450,10 @@ font-weight: 700;
 .printArea {
   display: none;
 }
+.interventiPrint {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 
 @media print {
   .page {
@@ -462,6 +466,29 @@ font-weight: 700;
     color: #111827 !important;
     padding: 30px;
     font-family: Arial, sans-serif;
+  }
+
+  .interventiPrint {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
+@media print {
+  .page {
+    display: none !important;
+  }
+
+  .printArea {
+    display: block !important;
+    background: white !important;
+    color: #111827 !important;
+    padding: 30px;
+    font-family: Arial, sans-serif;
+  }
+
+  .interventiPrint {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
 
@@ -664,4 +691,245 @@ input[type="number"]::-webkit-inner-spin-button {
 
 input[type="number"] {
   -moz-appearance: textfield;
+}
+/* =========================
+   STILE SCHEDA LAVORO PDF
+   Zenith blu + rosso
+   ========================= */
+
+.printArea {
+  color: #111827;
+}
+
+/* Riquadri principali */
+.printSection {
+  border: 1.5px solid #123f7a;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: #ffffff;
+}
+
+/* Dati cliente + imbarcazione */
+.twoPrintCols {
+  background: #f8fbff;
+  border-color: #123f7a;
+}
+
+.twoPrintCols h2 {
+  color: #123f7a;
+  font-size: 17px;
+  margin-bottom: 10px;
+}
+
+/* Titolo lavoro */
+.titoloLavoroPrint {
+  border: 1.5px solid #123f7a;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.titoloLavoroPrint h2 {
+  margin: 0;
+  padding: 8px 15px;
+  background: #123f7a;
+  color: white;
+  font-size: 17px;
+}
+
+.titoloLavoroPrint p {
+  margin: 0;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  background: #ffffff;
+}
+
+/* Lavoro richiesto */
+.lavoroRichiestoPrint {
+  border: 1.5px solid #123f7a;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 500px;
+  background: #ffffff;
+  margin-bottom: 16px;
+}
+
+.lavoroRichiestoPrint h2 {
+  margin: 0;
+  padding: 11px 15px;
+  background: #123f7a;
+  color: white;
+  font-size: 17px;
+  text-align: center;
+}
+
+.lavoroRichiestoPrint > div {
+  padding: 16px;
+  white-space: pre-wrap;
+  text-align: left;
+  line-height: 1.45;
+}
+
+/* Piccolo accento rosso sui titoli */
+
+
+/* Testi */
+.printSection p,
+.lavoroRichiestoPrint {
+  line-height: 1.45;
+}
+
+/* Colore rosso Zenith come accento */
+.printAccentRed {
+  color: #dc2626;
+}
+
+/* Stampa */
+@media print {
+  .titoloLavoroPrint,
+  .lavoroRichiestoPrint,
+  .printSection {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+.riepilogoLavoroTitle {
+  background: #123f7a;
+  color: white;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  padding: 11px 15px;
+  border: 1.5px solid #123f7a;
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+}
+
+.priceRows {
+  border: 1.5px solid #123f7a;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+}
+.ricambiPrint {
+  border: 1.5px solid #123f7a;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+  margin-bottom: 16px;
+}
+
+.ricambiPrint h2 {
+  margin: 0;
+  padding: 11px 15px;
+  background: #123f7a;
+  color: white;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+}
+.ricambiPrint table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ricambiPrint th {
+  color: #123f7a;
+  font-weight: 700;
+  padding: 8px;
+}
+
+.ricambiPrint td {
+  padding: 8px;
+}
+
+.ricambiPrint tbody tr {
+  border-bottom: 1px solid #dbe3ea;
+}
+@media print {
+  .ricambiPrint h2 {
+    background: #123f7a !important;
+    color: #ffffff !important;
+    padding: 11px 15px !important;
+    margin: 0 !important;
+    font-size: 17px !important;
+    font-weight: 700 !important;
+    text-align: center !important;
+
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .ricambiPrint {
+    border: 1.5px solid #123f7a !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+  }
+}
+/* Righe alternate tabella ricambi */
+.ricambiPrint tbody tr:nth-child(even) {
+  background: #f2f8fc;
+}
+
+.ricambiPrint tbody tr:nth-child(odd) {
+  background: #ffffff;
+}
+
+/* Descrizione centrata */
+.ricambiPrint th:first-child,
+.ricambiPrint td:first-child {
+  text-align: center !important;
+}
+@media print {
+  .ricambiPrint tbody tr:nth-child(even) {
+    background: #f2f8fc !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .ricambiPrint tbody tr:nth-child(odd) {
+    background: #ffffff !important;
+  }
+}
+.interventiPrint {
+  border: 1.5px solid #123f7a;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 500px;
+  background: #ffffff;
+  margin-bottom: 16px;
+}
+
+.interventiPrint h2 {
+  margin: 0;
+  padding: 11px 15px;
+  background: #123f7a;
+  color: white;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.interventiPrint > div {
+  padding: 16px;
+  white-space: pre-wrap;
+  text-align: left;
+  line-height: 1.45;
+}
+
+@media print {
+  .interventiPrint h2 {
+    background: #123f7a !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+.interventiPrint {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }

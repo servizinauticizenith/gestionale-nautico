@@ -2535,31 +2535,27 @@ function LavoroStampabile({ lavoro }) {
         </div>
       </div>
 
-      <div className="printSection">
-        <h2>Titolo lavoro</h2>
-        <p>{lavoro.titolo || "-"}</p>
-      </div>
+      <div className="titoloLavoroPrint">
+  <h2>Titolo lavoro</h2>
+  <p>{lavoro.titolo || "-"}</p>
+</div>
 
-     <div>
-  <h2 style={{ marginBottom: "12px" }}>
-    Lavoro richiesto
-  </h2>
-        <div
-  style={{
-    border: "1px solid #ccc",
-    borderRadius: "8px",
-    padding: "12px",
-    minHeight: "500px",
-    whiteSpace: "pre-wrap",
-    textAlign: "left",
-  }}
->
+    
+  <div className="lavoroRichiestoPrint">
+  <h2>Lavoro richiesto</h2>
+
+  <div
+    style={{
+      whiteSpace: "pre-wrap",
+      textAlign: "left",
+    }}
+  >
   {lavoro.lavoro || "-"}
 </div>
       </div>
 
       <div
-  className="printSection"
+  className="ricambiPrint"
   style={{ pageBreakBefore: "always" }}
 >
   <h2>Ricambi / materiali</h2>
@@ -2670,12 +2666,15 @@ function LavoroStampabile({ lavoro }) {
     </table>
 
     <div
-      style={{
-        textAlign: "right",
-        marginTop: "14px",
-        fontWeight: "bold",
-      }}
-    >
+  style={{
+    textAlign: "right",
+    marginTop: "0px",
+    padding: "12px",
+    fontWeight: "bold",
+    background: "#f2f8fc",
+    borderTop: "1px solid #b8cfdf",
+  }}
+>
       Totale ricambi:{" "}
       {euro(
         lavoro.ricambiDettaglio.reduce(
@@ -2701,27 +2700,24 @@ function LavoroStampabile({ lavoro }) {
   </div>
 )}
 </div>
-      <div className="printSection">
- <h2>Interventi eseguiti</h2>
+      <div className="interventiPrint">
+  <h2>Interventi eseguiti</h2>
 
-<div
-  style={{
-    minHeight: "500px",
-    marginTop: "10px",
-    marginBottom: "22px",
-    whiteSpace: "pre-wrap",
-    textAlign: "left",
-  }}
->
-  {lavoro.interventiEseguiti || ""}
-</div>
+  <div
+    style={{
+      whiteSpace: "pre-wrap",
+      textAlign: "left",
+    }}
+  >
+    {lavoro.interventiEseguiti || ""}
+  </div>
 </div>
 
 <div
   className="printSection"
   style={{
     pageBreakBefore: "always",
-    paddingTop: "35px",
+    paddingTop: "15px",
   }}
 >
 <div className="printHeader">
@@ -2761,6 +2757,9 @@ function LavoroStampabile({ lavoro }) {
 </div>
 
  <div style={{ height: "50px" }}></div>
+ <div className="riepilogoLavoroTitle">
+  Riepilogo lavoro
+</div>
 
   <div className="priceRows">
     <div>
@@ -2790,12 +2789,14 @@ function LavoroStampabile({ lavoro }) {
   style={{
     display: "block",
     textAlign: "center",
+    background: "#f2f8fc",
+    padding: "14px",
   }}
 >
   <div
     style={{
       textAlign: "center",
-      marginBottom: "18px",
+      marginBottom: "10px",
     }}
   >
     <span>Totale lavoro</span>
@@ -2849,7 +2850,7 @@ function LavoroStampabile({ lavoro }) {
       <div
   className="printFooter"
   style={{
-    marginTop: "220px",
+    marginTop: "120px",
   }}
 >
         <div>
