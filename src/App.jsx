@@ -1,5 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { collection, addDoc, deleteDoc, doc, onSnapshot, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  updateDoc,
+  runTransaction,
+} from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "./firebase";
 import logoZenith from "./assets/logo_zenith.jpg";
@@ -15,7 +23,7 @@ const statiPreventivo = ["Da preparare", "Inviato", "Approvato",];
 
 function nuovoLavoroVuoto() {
   return {
-    id: `LAV-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`,
+    id: "",
     cliente: "",
     telefono: "",
     barca: "",
@@ -42,7 +50,7 @@ function nuovoLavoroVuoto() {
 
 function nuovoPreventivoVuoto() {
   return {
-    id: `PREV-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`,
+    id: "",
     data: new Date().toISOString().slice(0, 10),
     cliente: "",
     telefono: "",
@@ -81,6 +89,9 @@ export default function App() {
   note: "",
 });
 const [clienteInModifica, setClienteInModifica] = useState(null);
+const [clienteAperto, setClienteAperto] = useState(null);
+const [ordinaClientiPerSaldo, setOrdinaClientiPerSaldo] = useState(false);
+const [ricercaGlobale, setRicercaGlobale] = useState("");
   const [preventivoInModifica, setPreventivoInModifica] = useState(null);
   const [ricerca, setRicerca] = useState("");
   const [ricercaClienteLavoro, setRicercaClienteLavoro] = useState("");
@@ -242,28 +253,112 @@ async function salvaCliente(e) {
   }
 
   const totaleRicambi = (form.ricambiDettaglio || []).reduce(
-  (totale, ricambio) =>
-    totale +
-    numero(ricambio.quantita) *
-      numero(ricambio.prezzo),
-  0
-);
+    (totale, ricambio) =>
+      totale +
+      numero(ricambio.quantita) *
+        numero(ricambio.prezzo),
+    0
+  );
 
-const datiLavoro = {
-  ...form,
-  costoRicambi: String(totaleRicambi),
-};
+  let idLavoro = form.id;
 
-delete datiLavoro.firebaseId;
-
-  if (lavoroInModifica) {
-    await updateDoc(doc(db, "lavori", lavoroInModifica), datiLavoro);
-    setLavoroInModifica(null);
-  } else {
-    await addDoc(collection(db, "lavori"), datiLavoro);
+  if (!idLavoro) {
+    idLavoro = await generaNumeroLavoro();
   }
 
+  const datiLavoro = {
+    ...form,
+    id: idLavoro,
+    costoRicambi: String(totaleRicambi),
+  };
+
+  delete datiLavoro.firebaseId;
+
+  if (lavoroInModifica) {
+    await updateDoc(
+      doc(db, "lavori", lavoroInModifica),
+      datiLavoro
+    );
+
+    setLavoroInModifica(null);
+  } else {
+    await addDoc(
+      collection(db, "lavori"),
+      datiLavoro
+    );
+  }
+alert("Lavoro salvato");
   setForm(nuovoLavoroVuoto());
+}
+async function generaNumeroRimessaggio() {
+  const anno = new Date().getFullYear();
+  const contatoreRef = doc(db, "contatori", `rimessaggi-${anno}`);
+
+  const numeroProgressivo = await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(contatoreRef);
+
+    let prossimoNumero = 1;
+
+    if (snapshot.exists()) {
+      prossimoNumero = (snapshot.data().ultimoNumero || 0) + 1;
+    }
+
+    transaction.set(contatoreRef, {
+      ultimoNumero: prossimoNumero,
+      anno,
+    });
+
+    return prossimoNumero;
+  });
+
+  return `RIM-${anno}-${String(numeroProgressivo).padStart(4, "0")}`;
+}
+
+async function generaNumeroPreventivo() {
+  const anno = new Date().getFullYear();
+  const contatoreRef = doc(db, "contatori", `preventivi-${anno}`);
+
+  const numeroProgressivo = await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(contatoreRef);
+
+    let prossimoNumero = 1;
+
+    if (snapshot.exists()) {
+      prossimoNumero = (snapshot.data().ultimoNumero || 0) + 1;
+    }
+
+    transaction.set(contatoreRef, {
+      ultimoNumero: prossimoNumero,
+      anno,
+    });
+
+    return prossimoNumero;
+  });
+
+  return `PREV-${anno}-${String(numeroProgressivo).padStart(4, "0")}`;
+}
+  async function generaNumeroLavoro() {
+  const anno = new Date().getFullYear();
+  const contatoreRef = doc(db, "contatori", `lavori-${anno}`);
+
+  const numeroProgressivo = await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(contatoreRef);
+
+    let prossimoNumero = 1;
+
+    if (snapshot.exists()) {
+      prossimoNumero = (snapshot.data().ultimoNumero || 0) + 1;
+    }
+
+    transaction.set(contatoreRef, {
+      ultimoNumero: prossimoNumero,
+      anno,
+    });
+
+    return prossimoNumero;
+  });
+
+  return `LAV-${anno}-${String(numeroProgressivo).padStart(4, "0")}`;
 }
 async function salvaRimessaggio() {
   if (!form.cliente?.trim()) {
@@ -271,10 +366,19 @@ async function salvaRimessaggio() {
     return;
   }
 
-  const datiRimessaggio = {
-    ...form,
-    tipo: "rimessaggio",
-  };
+  let idRimessaggio = form.id;
+
+const formatoNuovo = /^RIM-\d{4}-\d{4}$/;
+
+if (!idRimessaggio || !formatoNuovo.test(String(idRimessaggio))) {
+  idRimessaggio = await generaNumeroRimessaggio();
+}
+
+const datiRimessaggio = {
+  ...form,
+  id: idRimessaggio,
+  tipo: "rimessaggio",
+};
 
   if (rimessaggioInModifica) {
     await updateDoc(
@@ -305,17 +409,28 @@ async function salvaRimessaggio() {
       return;
     }
 
-    const datiPreventivo = { ...formPreventivo };
+    let idPreventivo = formPreventivo.id;
+
+if (!idPreventivo) {
+  idPreventivo = await generaNumeroPreventivo();
+}
+
+const datiPreventivo = {
+  ...formPreventivo,
+  id: idPreventivo,
+};
     delete datiPreventivo.firebaseId;
 
     if (preventivoInModifica) {
-      await updateDoc(doc(db, "preventivi", preventivoInModifica), datiPreventivo);
-      setPreventivoInModifica(null);
-    } else {
-      await addDoc(collection(db, "preventivi"), datiPreventivo);
-    }
+  await updateDoc(doc(db, "preventivi", preventivoInModifica), datiPreventivo);
+  setPreventivoInModifica(null);
+} else {
+  await addDoc(collection(db, "preventivi"), datiPreventivo);
+}
 
-    setFormPreventivo(nuovoPreventivoVuoto());
+alert("Preventivo salvato");
+
+setFormPreventivo(nuovoPreventivoVuoto());
   }
 
   async function aggiornaCampo(firebaseId, campo, valore) {
@@ -807,7 +922,16 @@ padding-top: 10px;
 
   const lavoriFiltrati = useMemo(() => {
   return lavori.filter((lavoro) => {
-    const testo = Object.values(lavoro).join(" ").toLowerCase();
+    const testo = [
+  lavoro.id,
+  lavoro.cliente,
+  lavoro.titolo,
+  lavoro.barca,
+  lavoro.motore,
+  lavoro.matricola,
+]
+  .join(" ")
+  .toLowerCase();
 
     const matchRicerca = testo.includes(ricerca.toLowerCase());
 
@@ -848,18 +972,35 @@ padding-top: 10px;
 
   const preventiviFiltrati = useMemo(() => {
     return preventivi.filter((preventivo) => {
-      const testo = Object.values(preventivo).join(" ").toLowerCase();
+      const testo = [
+  preventivo.id,
+  preventivo.cliente,
+  preventivo.titolo,
+  preventivo.barca,
+  preventivo.motore,
+  preventivo.matricola,
+]
+  .join(" ")
+  .toLowerCase();
       return testo.includes(ricerca.toLowerCase());
     });
   }, [preventivi, ricerca]);
   
   const rimessaggiFiltrati = useMemo(() => {
   return rimessaggi.filter((r) => {
-    const matchRicerca =
-      ricerca === "" ||
-      JSON.stringify(r)
-        .toLowerCase()
-        .includes(ricerca.toLowerCase());
+    const testo = [
+  r.id,
+  r.cliente,
+  r.barca,
+  r.motore,
+  r.matricola,
+]
+  .join(" ")
+  .toLowerCase();
+
+const matchRicerca =
+  ricerca === "" ||
+  testo.includes(ricerca.toLowerCase());
 
     const pagamentoRimessaggio = r.pagamento || "Da pagare";
 
@@ -956,6 +1097,107 @@ totaleRimessaggiDaIncassare: rimessaggi
 };
 
   const totaleFormPreventivo = calcolaTotale(formPreventivo);
+  const risultatiRicercaGlobale = useMemo(() => {
+  const q = ricercaGlobale.trim().toLowerCase();
+
+  if (!q) return [];
+
+  const risultati = [];
+
+  clientiDb.forEach((cliente) => {
+    const testo = [
+      cliente.cliente,
+      cliente.telefono,
+      cliente.barca,
+      cliente.motore,
+      cliente.matricola,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    if (testo.includes(q)) {
+      risultati.push({
+        tipo: "cliente",
+        dati: cliente,
+      });
+    }
+  });
+
+  lavori.forEach((lavoro) => {
+    const testo = [
+      lavoro.id,
+      lavoro.cliente,
+      lavoro.titolo,
+      lavoro.barca,
+      lavoro.motore,
+      lavoro.matricola,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    if (testo.includes(q)) {
+      risultati.push({
+        tipo: "lavoro",
+        dati: lavoro,
+      });
+    }
+  });
+
+  preventivi.forEach((preventivo) => {
+    const testo = [
+      preventivo.id,
+      preventivo.cliente,
+      preventivo.titolo,
+      preventivo.barca,
+      preventivo.motore,
+      preventivo.matricola,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    if (testo.includes(q)) {
+      risultati.push({
+        tipo: "preventivo",
+        dati: preventivo,
+      });
+    }
+  });
+
+  rimessaggi.forEach((rimessaggio) => {
+    const testo = [
+      rimessaggio.id,
+      rimessaggio.cliente,
+      rimessaggio.barca,
+      rimessaggio.motore,
+      rimessaggio.matricola,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    if (testo.includes(q)) {
+      risultati.push({
+        tipo: "rimessaggio",
+        dati: rimessaggio,
+      });
+    }
+  });
+
+  return risultati.sort((a, b) => {
+  const clienteA = (a.dati.cliente || "").toLowerCase();
+  const clienteB = (b.dati.cliente || "").toLowerCase();
+
+  if (clienteA < clienteB) return -1;
+  if (clienteA > clienteB) return 1;
+
+  return a.tipo.localeCompare(b.tipo);
+});
+}, [
+  ricercaGlobale,
+  clientiDb,
+  lavori,
+  preventivi,
+  rimessaggi,
+]);
   const clientiRicercatiLavoro = clientiDb.filter((cliente) => {
   const testo = [
     cliente.cliente,
@@ -968,6 +1210,62 @@ totaleRimessaggiDaIncassare: rimessaggi
     .toLowerCase();
 
 return testo.includes(ricerca.toLowerCase());});
+const clientiOrdinati = [...clientiRicercatiLavoro];
+
+if (ordinaClientiPerSaldo) {
+  clientiOrdinati.sort((a, b) => {
+    const saldoCliente = (cliente) => {
+      const lavoriCliente = lavori.filter(
+        (lavoro) => lavoro.cliente === cliente.cliente
+      );
+
+      const rimessaggiCliente = rimessaggi.filter(
+        (rimessaggio) => rimessaggio.cliente === cliente.cliente
+      );
+
+      const saldoLavori = lavoriCliente.reduce((totale, lavoro) => {
+        if (
+          lavoro.pagamento === "Pagato" ||
+          lavoro.pagamento === "Fatturato"
+        ) {
+          return totale;
+        }
+
+        const totaleLavoro =
+          numero(lavoro.costoRicambi) +
+          numero(lavoro.oreManodopera) * numero(lavoro.prezzoOra) +
+          numero(lavoro.altro);
+
+        return totale + Math.max(
+          0,
+          totaleLavoro - numero(lavoro.acconto)
+        );
+      }, 0);
+
+      const saldoRimessaggi = rimessaggiCliente.reduce(
+        (totale, rimessaggio) => {
+          if (
+            rimessaggio.pagamento === "Pagato" ||
+            rimessaggio.pagamento === "Fatturato"
+          ) {
+            return totale;
+          }
+
+          return totale + Math.max(
+            0,
+            numero(rimessaggio.prezzoRimessaggio) -
+              numero(rimessaggio.acconto)
+          );
+        },
+        0
+      );
+
+      return saldoLavori + saldoRimessaggi;
+    };
+
+    return saldoCliente(b) - saldoCliente(a);
+  });
+}
 
   if (caricamento) {
     return (
@@ -1120,11 +1418,153 @@ return testo.includes(ricerca.toLowerCase());});
 </div>
           <div className="stat"><span>Preventivi</span><strong>{riepilogo.preventivi}</strong></div>
         </section>
+        <div
+  style={{
+    margin: "18px 0",
+    position: "relative",
+    zIndex: 50,
+  }}
+>
+  <input
+    type="text"
+    placeholder="Ricerca globale: cliente, barca, matricola, LAV, PREV, RIM..."
+    value={ricercaGlobale}
+    onChange={(e) => setRicercaGlobale(e.target.value)}
+    style={{
+      width: "680px",
+maxWidth: "90%",
+      padding: "12px 14px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "10px",
+      fontSize: "14px",
+    }}
+  />
+
+  {ricercaGlobale.trim() && (
+    <div
+  style={{
+  position: "absolute",
+  top: "calc(100% + 8px)",
+  left: 0,
+  width: "680px",
+  maxWidth: "90%",
+  zIndex: 100,
+  border: "1px solid #cbd5e1",
+  borderRadius: "12px",
+  overflow: "hidden",
+  background: "white",
+  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.14)",
+  maxHeight: "700px",
+  overflowY: "auto",
+}}
+>
+      {risultatiRicercaGlobale.length === 0 ? (
+        <div style={{ padding: "12px", color: "#64748b" }}>
+          Nessun risultato
+        </div>
+      ) : (
+        risultatiRicercaGlobale.map((risultato, index) => {
+  const clienteCorrente = risultato.dati.cliente || "-";
+
+  const clientePrecedente =
+    index > 0
+      ? risultatiRicercaGlobale[index - 1].dati.cliente || "-"
+      : null;
+
+  const nuovoCliente =
+    index === 0 || clienteCorrente !== clientePrecedente;
+
+  return (
+    <React.Fragment
+      key={`${risultato.tipo}-${risultato.dati.firebaseId || risultato.dati.id || index}`}
+    >
+      {nuovoCliente && (
+        <div
+          style={{
+            padding: "10px 12px 6px",
+            fontSize: "13px",
+            fontWeight: "800",
+            color: "#dc2626",
+            background: "#f8fafc",
+            borderTop: index > 0 ? "1px solid #cbd5e1" : "none",
+            textAlign: "left",
+          }}
+        >
+          {clienteCorrente}
+        </div>
+      )}
+
+      <div
+        onClick={() => {
+          if (risultato.tipo === "cliente") {
+            setVista("clienti");
+            setRicerca(risultato.dati.cliente || "");
+
+            if (risultato.dati.firebaseId) {
+              setClienteAperto(risultato.dati.firebaseId);
+            }
+          }
+
+          if (risultato.tipo === "lavoro") {
+            setVista("lavori");
+            setForm({ ...risultato.dati });
+            setLavoroInModifica(risultato.dati.firebaseId);
+          }
+
+          if (risultato.tipo === "preventivo") {
+            modificaPreventivo(risultato.dati);
+          }
+
+          if (risultato.tipo === "rimessaggio") {
+            setVista("rimessaggi");
+            setForm({ ...risultato.dati });
+            setRimessaggioInModifica(risultato.dati.firebaseId);
+          }
+
+          setRicercaGlobale("");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        style={{
+          padding: "8px 18px",
+          borderBottom: "1px solid #e2e8f0",
+          textAlign: "left",
+          cursor: "pointer",
+          fontSize: "12px",
+        }}
+      >
+        <strong
+          style={{
+            textTransform: "capitalize",
+            color: "#2563eb",
+          }}
+        >
+          {risultato.tipo}
+        </strong>
+
+        {" — "}
+
+        {risultato.dati.id
+          ? `${risultato.dati.id} — `
+          : ""}
+
+        {risultato.dati.cliente || "-"}
+      </div>
+    </React.Fragment>
+  );
+})
+      )}
+    </div>
+  )}
+</div>
 
         <div className="tabs">
   <button
     className={vista === "lavori" ? "active" : ""}
-    onClick={() => setVista("lavori")}
+    onClick={() => {
+  setVista("lavori");
+  setForm(nuovoLavoroVuoto());
+  setLavoroInModifica(null);
+}}
   >
     Lavori officina
   </button>
@@ -1138,13 +1578,21 @@ return testo.includes(ricerca.toLowerCase());});
 
   <button
     className={vista === "preventivi" ? "active" : ""}
-    onClick={() => setVista("preventivi")}
+    onClick={() => {
+  setVista("preventivi");
+  setFormPreventivo(nuovoPreventivoVuoto());
+  setPreventivoInModifica(null);
+}}
   >
     Preventivi
   </button>
   <button
   className={vista === "rimessaggi" ? "active" : ""}
-  onClick={() => setVista("rimessaggi")}
+  onClick={() => {
+  setVista("rimessaggi");
+  setForm(nuovoLavoroVuoto());
+  setRimessaggioInModifica(null);
+}}
 >
   Rimessaggi
 </button>
@@ -1412,43 +1860,45 @@ return testo.includes(ricerca.toLowerCase());});
         }}
       />
 
+     <input
+  type="number"
+  min="1"
+  placeholder="Qtà"
+  value={ricambio.quantita || ""}
+  onWheel={(e) => e.currentTarget.blur()}
+  onChange={(e) => {
+    const nuovi = [...(form.ricambiDettaglio || [])];
+    nuovi[index] = {
+      ...nuovi[index],
+      quantita: e.target.value,
+    };
+
+    setForm({
+      ...form,
+      ricambiDettaglio: nuovi,
+    });
+  }}
+/>
+
       <input
-        type="number"
-        min="1"
-        placeholder="Qtà"
-        value={ricambio.quantita || ""}
-        onChange={(e) => {
-          const nuovi = [...(form.ricambiDettaglio || [])];
-          nuovi[index] = {
-            ...nuovi[index],
-            quantita: e.target.value,
-          };
+  type="number"
+  step="0.01"
+  placeholder="Prezzo €"
+  value={ricambio.prezzo || ""}
+  onWheel={(e) => e.currentTarget.blur()}
+  onChange={(e) => {
+    const nuovi = [...(form.ricambiDettaglio || [])];
+    nuovi[index] = {
+      ...nuovi[index],
+      prezzo: e.target.value,
+    };
 
-          setForm({
-            ...form,
-            ricambiDettaglio: nuovi,
-          });
-        }}
-      />
-
-      <input
-        type="number"
-        step="0.01"
-        placeholder="Prezzo €"
-        value={ricambio.prezzo || ""}
-        onChange={(e) => {
-          const nuovi = [...(form.ricambiDettaglio || [])];
-          nuovi[index] = {
-            ...nuovi[index],
-            prezzo: e.target.value,
-          };
-
-          setForm({
-            ...form,
-            ricambiDettaglio: nuovi,
-          });
-        }}
-      />
+    setForm({
+      ...form,
+      ricambiDettaglio: nuovi,
+    });
+  }}
+/>
 
       <strong>
         {euro(
@@ -1669,12 +2119,14 @@ return testo.includes(ricerca.toLowerCase());});
         gap: "12px",
       }}
     >
-      <div
+     <div
   style={{
     display: "grid",
-    gridTemplateColumns: "170px 150px 80px 95px 135px",
+    gridTemplateColumns: "190px 170px 110px",
+    gridTemplateRows: "auto auto",
     alignItems: "center",
-    gap: "8px",
+    columnGap: "12px",
+    rowGap: "5px",
     minWidth: 0,
     flex: 1,
   }}
@@ -1720,6 +2172,16 @@ return testo.includes(ricerca.toLowerCase());});
 </span>
 <span
   style={{
+    fontSize: "12px",
+    color: "#64748b",
+    fontWeight: "600",
+    whiteSpace: "nowrap",
+  }}
+>
+  Scheda: {lavoro.id || "-"}
+</span>
+<span
+  style={{
     fontSize: "13px",
     fontWeight: "700",
     whiteSpace: "nowrap",
@@ -1742,7 +2204,6 @@ return testo.includes(ricerca.toLowerCase());});
     fontSize: "13px",
     color: "#666",
     whiteSpace: "nowrap",
-    marginLeft: "auto",
   }}
 >
   Consegna: {formatData(lavoro.consegna)}
@@ -1757,7 +2218,7 @@ return testo.includes(ricerca.toLowerCase());});
             setLavoroInModifica(lavoro.firebaseId);
           }}
         >
-          ✏️ Modifica
+          Modifica
         </button>
 
         <button
@@ -1770,7 +2231,7 @@ return testo.includes(ricerca.toLowerCase());});
             }, 300);
           }}
         >
-          📄 PDF
+          PDF
         </button>
 
         <button
@@ -1778,7 +2239,7 @@ return testo.includes(ricerca.toLowerCase());});
           className="actionBtn deleteBtn"
           onClick={() => eliminaLavoro(lavoro.firebaseId)}
         >
-          🗑 Elimina
+          Elimina
         </button>
       </div>
     </div>
@@ -1949,8 +2410,27 @@ return testo.includes(ricerca.toLowerCase());});
         padding: "10px",
       }}
     />
-
-    {clientiRicercatiLavoro.map((cliente) => {
+<button
+  type="button"
+  onClick={() =>
+    setOrdinaClientiPerSaldo(!ordinaClientiPerSaldo)
+  }
+  style={{
+    marginBottom: "15px",
+    padding: "10px 14px",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "700",
+    background: ordinaClientiPerSaldo ? "#dbeafe" : "#f1f5f9",
+    color: ordinaClientiPerSaldo ? "#1d4ed8" : "#334155",
+  }}
+>
+  {ordinaClientiPerSaldo
+    ? "Ordine normale"
+    : "Ordina per saldo"}
+</button>
+    {clientiOrdinati.map((cliente) => {
       const lavoriCliente = lavori.filter(
         (lavoro) => lavoro.cliente === cliente.cliente
       );
@@ -1958,6 +2438,46 @@ return testo.includes(ricerca.toLowerCase());});
       const preventiviCliente = preventivi.filter(
         (preventivo) => preventivo.cliente === cliente.cliente
       );
+      const rimessaggiCliente = rimessaggi.filter(
+  (rimessaggio) => rimessaggio.cliente === cliente.cliente
+);
+const saldoLavoriCliente = lavoriCliente.reduce((totale, lavoro) => {
+  if (
+    lavoro.pagamento === "Pagato" ||
+    lavoro.pagamento === "Fatturato"
+  ) {
+    return totale;
+  }
+
+  const totaleLavoro =
+    numero(lavoro.costoRicambi) +
+    numero(lavoro.oreManodopera) * numero(lavoro.prezzoOra) +
+    numero(lavoro.altro);
+
+  const saldo =
+    totaleLavoro - numero(lavoro.acconto);
+
+  return totale + Math.max(0, saldo);
+}, 0);
+const saldoRimessaggiCliente = rimessaggiCliente.reduce(
+  (totale, rimessaggio) => {
+    if (
+      rimessaggio.pagamento === "Pagato" ||
+      rimessaggio.pagamento === "Fatturato"
+    ) {
+      return totale;
+    }
+
+    const saldo =
+      numero(rimessaggio.prezzoRimessaggio) -
+      numero(rimessaggio.acconto);
+
+    return totale + Math.max(0, saldo);
+  },
+  0
+);
+const saldoTotaleCliente =
+  saldoLavoriCliente + saldoRimessaggiCliente;
 
       return (
         <article
@@ -1991,17 +2511,77 @@ return testo.includes(ricerca.toLowerCase());});
           color: "#666",
         }}
       >
-        Lavori: {lavoriCliente.length} | Preventivi: {preventiviCliente.length}
+       Lavori: {lavoriCliente.length} | Preventivi: {preventiviCliente.length} | Rimessaggi: {rimessaggiCliente.length}
+      <div
+  style={{
+    marginTop: "8px",
+    fontSize: "13px",
+    lineHeight: "1.6",
+  }}
+>
+  <div>
+    Saldo lavori: <strong>{euro(saldoLavoriCliente)}</strong>
+  </div>
+
+  <div>
+    Saldo rimessaggi: <strong>{euro(saldoRimessaggiCliente)}</strong>
+  </div>
+
+  <div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flexWrap: "wrap",
+  }}
+>
+  <span>
+    Saldo totale: <strong>{euro(saldoTotaleCliente)}</strong>
+  </span>
+
+  <span
+    style={{
+      padding: "3px 8px",
+      borderRadius: "999px",
+      fontSize: "11px",
+      fontWeight: "700",
+      background:
+        saldoTotaleCliente > 0 ? "#fee2e2" : "#dcfce7",
+      color:
+        saldoTotaleCliente > 0 ? "#dc2626" : "#15803d",
+    }}
+  >
+    {saldoTotaleCliente > 0 ? "DA INCASSARE" : "IN REGOLA"}
+  </span>
+</div>
+</div>
       </div>
     </div>
 
     <div className="clientActions">
+    <button
+  type="button"
+  className="clientBtn"
+  style={{
+    background: "#0f172a",
+    color: "white",
+  }}
+  onClick={() =>
+    setClienteAperto(
+      clienteAperto === cliente.firebaseId
+        ? null
+        : cliente.firebaseId
+    )
+  }
+>
+  📂 Storico
+</button>
       <button
-        className="clientBtn editBtn"
-        onClick={() => modificaCliente(cliente)}
-      >
-        ✏️
-      </button>
+  className="clientBtn editBtn"
+  onClick={() => modificaCliente(cliente)}
+>
+  Modifica
+</button>
 
       <button
         type="button"
@@ -2019,7 +2599,7 @@ return testo.includes(ricerca.toLowerCase());});
           });
         }}
       >
-        ➕
+        Preventivo
       </button>
 
       <button
@@ -2038,7 +2618,7 @@ return testo.includes(ricerca.toLowerCase());});
           });
         }}
       >
-        🔧
+        Lavoro
           
       </button>
 
@@ -2047,10 +2627,148 @@ return testo.includes(ricerca.toLowerCase());});
         className="clientBtn deleteBtn"
         onClick={() => eliminaCliente(cliente.firebaseId)}
       >
-        🗑️
+        Elimina
       </button>
     </div>
   </div>
+  {clienteAperto === cliente.firebaseId && (
+  <div
+    style={{
+      marginTop: "15px",
+      paddingTop: "15px",
+      borderTop: "1px solid #cbd5e1",
+      textAlign: "left",
+    }}
+  >
+    <h3>Storico cliente</h3>
+
+    <div style={{ marginTop: "12px" }}>
+      <strong>Lavori ({lavoriCliente.length})</strong>
+
+      {lavoriCliente.length === 0 ? (
+        <p>Nessun lavoro registrato.</p>
+      ) : (
+        lavoriCliente.map((lavoro) => (
+          <div
+            key={lavoro.firebaseId}
+            style={{
+              padding: "8px 0",
+              borderBottom: "1px solid #e2e8f0",
+            }}
+          >
+            <button
+  type="button"
+  onClick={() => {
+    setVista("lavori");
+    setForm({ ...lavoro });
+    setLavoroInModifica(lavoro.firebaseId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }}
+  style={{
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    color: "#2563eb",
+    fontWeight: "700",
+    cursor: "pointer",
+    textDecoration: "underline",
+  }}
+>
+  {lavoro.id || "-"}
+</button>
+{" — "}
+{formatData(lavoro.ingresso)} —{" "}
+<strong>{lavoro.titolo || "Senza titolo"}</strong>
+{" — "}
+{lavoro.pagamento || "Non pagato"}
+          </div>
+        ))
+      )}
+    </div>
+
+    <div style={{ marginTop: "18px" }}>
+      <strong>Preventivi ({preventiviCliente.length})</strong>
+
+      {preventiviCliente.length === 0 ? (
+        <p>Nessun preventivo registrato.</p>
+      ) : (
+        preventiviCliente.map((preventivo) => (
+          <div
+            key={preventivo.firebaseId}
+            style={{
+              padding: "8px 0",
+              borderBottom: "1px solid #e2e8f0",
+            }}
+          >
+            <button
+  type="button"
+  onClick={() => modificaPreventivo(preventivo)}
+  style={{
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    color: "#2563eb",
+    fontWeight: "700",
+    cursor: "pointer",
+    textDecoration: "underline",
+  }}
+>
+  {preventivo.id || "-"}
+</button>
+{" — "}
+{formatData(preventivo.data)} —{" "}
+<strong>{preventivo.titolo || "Preventivo"}</strong>
+          </div>
+        ))
+      )}
+    </div>
+
+    <div style={{ marginTop: "18px" }}>
+      <strong>Rimessaggi ({rimessaggiCliente.length})</strong>
+
+      {rimessaggiCliente.length === 0 ? (
+        <p>Nessun rimessaggio registrato.</p>
+      ) : (
+        rimessaggiCliente.map((rimessaggio) => (
+          <div
+            key={rimessaggio.firebaseId}
+            style={{
+              padding: "8px 0",
+              borderBottom: "1px solid #e2e8f0",
+            }}
+          >
+            <button
+  type="button"
+  onClick={() => {
+  setVista("rimessaggi");
+  setForm({ ...rimessaggio });
+  setRimessaggioInModifica(rimessaggio.firebaseId);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}}
+  style={{
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    color: "#2563eb",
+    fontWeight: "700",
+    cursor: "pointer",
+    textDecoration: "underline",
+  }}
+>
+  {rimessaggio.id || "-"}
+</button>
+{" — "}
+{formatData(rimessaggio.ingresso)}
+{" — "}
+{rimessaggio.barca || "Imbarcazione"}
+{" — "}
+<strong>{rimessaggio.pagamento || "Da pagare"}</strong>
+          </div>
+        ))
+      )}
+    </div>
+  </div>
+)}
 </article>
       );
     })}
@@ -2304,7 +3022,7 @@ return testo.includes(ricerca.toLowerCase());});
             setRimessaggioInModifica(rimessaggio.firebaseId);
           }}
         >
-          ✏️ Modifica
+          Modifica
         </button>
 
         <button
@@ -2318,7 +3036,7 @@ return testo.includes(ricerca.toLowerCase());});
             }, 300);
           }}
         >
-          📄 PDF
+          PDF
         </button>
 
         <button
@@ -2328,7 +3046,7 @@ return testo.includes(ricerca.toLowerCase());});
             eliminaRimessaggio(rimessaggio.firebaseId)
           }
         >
-          🗑 Elimina
+          Elimina
         </button>
       </div>
     </div>
@@ -2355,35 +3073,47 @@ return testo.includes(ricerca.toLowerCase());});
                 {preventiviFiltrati.map((preventivo) => (
                   <article className="job preventivo" key={preventivo.firebaseId || preventivo.id}>
                     <div className="jobTop">
-  <div>
-    <strong>{preventivo.cliente}</strong>
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "180px 140px 135px",
+      alignItems: "center",
+      gap: "8px",
+      minWidth: 0,
+      flex: 1,
+    }}
+  >
+    <strong
+      style={{
+        fontSize: "13px",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}
+    >
+      {preventivo.cliente}
+    </strong>
 
-    <div
+    <span
       style={{
         fontSize: "14px",
-        marginTop: "4px",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
       }}
     >
       {preventivo.titolo || "Preventivo"}
-    </div>
+    </span>
 
-    <div
+        <span
       style={{
         fontSize: "13px",
         color: "#666",
-      }}
-    >
-      Totale: {euro(calcolaTotale(preventivo))}
-    </div>
-
-    <div
-      style={{
-        fontSize: "13px",
-        color: "#666",
+        whiteSpace: "nowrap",
       }}
     >
       Data: {formatData(preventivo.data)}
-    </div>
+    </span>
   </div>
 
   <div className="actions">
@@ -2391,28 +3121,28 @@ return testo.includes(ricerca.toLowerCase());});
       className="actionBtn editBtn"
       onClick={() => modificaPreventivo(preventivo)}
     >
-      ✏️ Modifica
+      Modifica
     </button>
 
     <button
       className="actionBtn pdfBtn"
       onClick={() => stampaPreventivo(preventivo)}
     >
-      📄 PDF
+      PDF
     </button>
 
     <button
       className="actionBtn lavoroBtn"
       onClick={() => creaLavoroDaPreventivo(preventivo)}
     >
-      🔧 Lavoro
+      Lavoro
     </button>
 
     <button
       className="actionBtn deleteBtn"
       onClick={() => eliminaPreventivo(preventivo.firebaseId)}
     >
-      🗑 Elimina
+      Elimina
     </button>
   </div>
 </div>
@@ -2973,9 +3703,10 @@ function RimessaggioStampabile({ rimessaggio }) {
         </div>
 
         <div className="printDocInfo">
-          <strong>Scheda rimessaggio</strong>
-          <span>{formatData(rimessaggio.ingresso)}</span>
-        </div>
+  <strong>Scheda rimessaggio</strong>
+  <span>{rimessaggio.id || "-"}</span>
+  <span>{formatData(rimessaggio.ingresso)}</span>
+</div>
       </div>
 
       <div className="printSection twoPrintCols">
@@ -3163,11 +3894,21 @@ function ElencoRimessaggiStampabile({ rimessaggi }) {
     </div>
   );
 }
-function Input({ label, value, onChange, type = "text" }) {
+function Input({ label, value, onChange, type = "text", readOnly = false }) {
   return (
     <label>
       {label}
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
+      <input
+        type={type}
+        value={value}
+        readOnly={readOnly}
+        onChange={(e) => onChange(e.target.value)}
+        onWheel={(e) => {
+          if (type === "number") {
+            e.currentTarget.blur();
+          }
+        }}
+      />
     </label>
   );
 }
