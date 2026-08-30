@@ -88,6 +88,7 @@ export default function App() {
   matricola: "",
   note: "",
 });
+const [mostraFormCliente, setMostraFormCliente] = useState(false);
 const [clienteInModifica, setClienteInModifica] = useState(null);
 const [clienteAperto, setClienteAperto] = useState(null);
 const [ordinaClientiPerSaldo, setOrdinaClientiPerSaldo] = useState(false);
@@ -104,7 +105,7 @@ const [filtroAnnoRimessaggi, setFiltroAnnoRimessaggi] = useState(
   new Date().getFullYear().toString()
 );
   const [filtroPagamentoRimessaggi, setFiltroPagamentoRimessaggi] = useState("Tutti");
-  const [vista, setVista] = useState("lavori");
+  const [vista, setVista] = useState("dashboard");
   const [preventivoDaStampare, setPreventivoDaStampare] = useState(null);
   const [rimessaggioDaStampare, setRimessaggioDaStampare] = useState(null);
   const [lavoroDaStampare, setLavoroDaStampare] = useState(null);
@@ -123,7 +124,7 @@ const [filtroAnnoRimessaggi, setFiltroAnnoRimessaggi] = useState(
 
   setClienteInModifica(cliente.firebaseId);
   
-
+setMostraFormCliente(true);
   setVista("clienti");
 }
 
@@ -236,13 +237,14 @@ async function salvaCliente(e) {
   alert(clienteInModifica ? "Cliente aggiornato" : "Cliente salvato");
 
   setFormCliente({
-    cliente: "",
+    Cliente: "",
     telefono: "",
     barca: "",
     motore: "",
     matricola: "",
     note: "",
   });
+  setMostraFormCliente(false);
 }
   async function aggiungiLavoro(e) {
   e.preventDefault();
@@ -1039,7 +1041,21 @@ const matchPagamento =
     });
   }, [clienti, ricerca]);
 
+const lavoriInScadenza = [...lavori]
+  .filter((lavoro) => {
+    const stato = (lavoro.stato || "").trim().toLowerCase();
 
+    return (
+      lavoro.consegna &&
+      stato !== "terminato" &&
+      stato !== "consegnato"
+    );
+  })
+  .sort(
+    (a, b) =>
+      new Date(a.consegna) - new Date(b.consegna)
+  )
+  .slice(0, 5);
 
   const riepilogo = {
   aperti: lavori.filter(
@@ -1352,77 +1368,93 @@ if (ordinaClientiPerSaldo) {
   <RimessaggioStampabile rimessaggio={rimessaggioDaStampare} />
 )}
 
-      <div className="page">
+      <div
+  className="page"
+  style={{
+    marginLeft: "240px",
+    width: "calc(100% - 240px)",
+  }}
+>
         <header className="header">
-          <div>
-            <h1>Gestionale Cantiere Nautico</h1>
-            <p>Clienti, lavori officina, preventivi, motori e priorità.</p>
-          </div>
-          <div className="headerActions">
-            <span>{utente.email}</span>
-            <button onClick={esci} className="logoutBtn">Esci</button>
-          </div>
-        </header>
+  <div>
+    <h1>Gestionale Cantiere Nautico</h1>
+    <p>Clienti, lavori officina, preventivi e rimessaggi</p>
+  </div>
 
-        <section className="stats">
-          <div className="stat"><span>Lavori aperti</span><strong>{riepilogo.aperti}</strong></div>
-                   <div
-  className="stat"
+  <div className="headerActions">
+    <div className="userInfo">
+      <span className="userEmail">{utente.email}</span>
+      <span className="userRole">Amministratore</span>
+    </div>
+
+    <button onClick={esci} className="logoutBtn">
+      Esci
+    </button>
+  </div>
+</header>
+
+        
+        
+
+        <div className="sidebarMenu">
+  <div className="sidebarBrand">
+    <div className="sidebarTitle">SEA SRLS</div>
+    <div className="sidebarSubtitle">Gestionale Cantiere</div>
+  </div>
+
+  <button
+    className={vista === "dashboard" ? "active" : ""}
+    onClick={() => setVista("dashboard")}
+  >
+    Dashboard
+  </button>
+  <button
+    className={vista === "clienti" ? "active" : ""}
+    onClick={() => setVista("clienti")}
+  >
+    Clienti
+  </button>
+
+  
+
+<button
+  className={vista === "lavori" ? "active" : ""}
   onClick={() => {
     setVista("lavori");
-    setFiltroPagamento("Non pagato");
-    setFiltroAnnoLavori("Tutti");
-    setRicerca("");
+    setForm(nuovoLavoroVuoto());
+    setLavoroInModifica(null);
   }}
-  style={{ cursor: "pointer" }}
->
-  <span>Lavori da incassare</span>
-
-  <strong>{riepilogo.daIncassare}</strong>
-
-  <div
-    style={{
-      marginTop: "6px",
-      fontSize: "14px",
-      color: "#64748b",
-      fontWeight: "600",
-    }}
   >
-    Totale: {euro(riepilogo.totaleDaIncassare)}
-  </div>
-</div>
-<div
-  className="stat"
+    
+    Lavori
+  </button>
+<button
+  className={vista === "rimessaggi" ? "active" : ""}
   onClick={() => {
   setVista("rimessaggi");
-  setFiltroPagamentoRimessaggi("Da pagare");
-  setFiltroAnnoRimessaggi("Tutti");
-  setRicerca("");
+  setForm(nuovoLavoroVuoto());
+  setRimessaggioInModifica(null);
 }}
-  style={{ cursor: "pointer" }}
 >
-  <span>Rimessaggi da incassare</span>
+  Rimessaggi
+</button>
 
-<strong>{riepilogo.rimessaggiDaIncassare}</strong>
-
-<div
+    <button
+    className={vista === "preventivi" ? "active" : ""}
+    onClick={() => {
+  setVista("preventivi");
+  setFormPreventivo(nuovoPreventivoVuoto());
+  setPreventivoInModifica(null);
+}}
+  >
+    Preventivi
+  </button>
+ <div
+  className="sidebarSearch"
   style={{
-    marginTop: "6px",
-    fontSize: "14px",
-    color: "#64748b",
-    fontWeight: "600",
-  }}
->
-  Totale: {euro(riepilogo.totaleRimessaggiDaIncassare)}
-</div>
-</div>
-          <div className="stat"><span>Preventivi</span><strong>{riepilogo.preventivi}</strong></div>
-        </section>
-        <div
-  style={{
-    margin: "18px 0",
     position: "relative",
     zIndex: 50,
+    width: "100%",
   }}
 >
   <input
@@ -1431,8 +1463,7 @@ if (ordinaClientiPerSaldo) {
     value={ricercaGlobale}
     onChange={(e) => setRicercaGlobale(e.target.value)}
     style={{
-      width: "680px",
-maxWidth: "90%",
+      width: "100%",
       padding: "12px 14px",
       border: "1px solid #cbd5e1",
       borderRadius: "10px",
@@ -1443,17 +1474,17 @@ maxWidth: "90%",
   {ricercaGlobale.trim() && (
     <div
   style={{
-  position: "absolute",
-  top: "calc(100% + 8px)",
-  left: 0,
+  position: "fixed",
+top: "20px",
+left: "250px",
   width: "680px",
-  maxWidth: "90%",
-  zIndex: 100,
+  maxWidth: "70vw",
+  zIndex: 2000,
   border: "1px solid #cbd5e1",
   borderRadius: "12px",
   overflow: "hidden",
   background: "white",
-  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.14)",
+  boxShadow: "0 12px 30px rgba(15, 23, 42, 0.18)",
   maxHeight: "700px",
   overflowY: "auto",
 }}
@@ -1557,52 +1588,71 @@ maxWidth: "90%",
   )}
 </div>
 
-        <div className="tabs">
-  <button
-    className={vista === "lavori" ? "active" : ""}
-    onClick={() => {
-  setVista("lavori");
-  setForm(nuovoLavoroVuoto());
-  setLavoroInModifica(null);
-}}
-  >
-    Lavori officina
-  </button>
 
-  <button
-    className={vista === "clienti" ? "active" : ""}
-    onClick={() => setVista("clienti")}
-  >
-    Archivio clienti
-  </button>
+<div className="sidebarStatsBottom">
 
-  <button
-    className={vista === "preventivi" ? "active" : ""}
-    onClick={() => {
-  setVista("preventivi");
-  setFormPreventivo(nuovoPreventivoVuoto());
-  setPreventivoInModifica(null);
-}}
-  >
-    Preventivi
-  </button>
-  <button
-  className={vista === "rimessaggi" ? "active" : ""}
-  onClick={() => {
-  setVista("rimessaggi");
-  setForm(nuovoLavoroVuoto());
-  setRimessaggioInModifica(null);
-}}
->
-  Rimessaggi
-</button>
+  <div className="sidebarStatBtn">
+    <span>Lavori aperti</span>
+    <strong>{riepilogo.aperti}</strong>
+  </div>
 
-{vista === "lavori" && (
-  <>
+  <div className="sidebarStatBtn">
+    <span>Lavori da incassare</span>
+
+    <strong>
+      {riepilogo.daIncassare}{" "}
+      <span
+        style={{
+          fontSize: "11px",
+          fontWeight: "600",
+          color: "#93c5fd",
+        }}
+      >
+        ({euro(riepilogo.totaleDaIncassare)})
+      </span>
+    </strong>
+  </div>
+
+  <div className="sidebarStatBtn">
+    <span>Rimessaggi da incassare</span>
+
+    <strong>
+      {riepilogo.rimessaggiDaIncassare}{" "}
+      <span
+        style={{
+          fontSize: "11px",
+          fontWeight: "600",
+          color: "#93c5fd",
+        }}
+      >
+        ({euro(riepilogo.totaleRimessaggiDaIncassare)})
+      </span>
+    </strong>
+  </div>
+
+</div>
+</div>
+
+{(vista === "lavori" || vista === "incassi") && (
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "flex-end",
+      gap: "10px",
+      margin: "14px 0 18px",
+      flexWrap: "wrap",
+    }}
+  >
     <select
       value={filtroAnnoLavori}
       onChange={(e) => setFiltroAnnoLavori(e.target.value)}
-      style={{ marginLeft: "10px" }}
+      style={{
+        padding: "8px 10px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        background: "white",
+      }}
     >
       <option value="Tutti">Tutti gli anni</option>
       <option value="2026">2026</option>
@@ -1613,9 +1663,14 @@ maxWidth: "90%",
     <select
       value={filtroStato}
       onChange={(e) => setFiltroStato(e.target.value)}
-      style={{ marginLeft: "10px" }}
+      style={{
+        padding: "8px 10px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        background: "white",
+      }}
     >
-      <option value="Tutti">Tutti</option>
+      <option value="Tutti">Tutti gli stati</option>
       <option value="In lavorazione">In lavorazione</option>
       <option value="Terminato">Terminato</option>
     </select>
@@ -1623,7 +1678,12 @@ maxWidth: "90%",
     <select
       value={filtroPagamento}
       onChange={(e) => setFiltroPagamento(e.target.value)}
-      style={{ marginLeft: "10px" }}
+      style={{
+        padding: "8px 10px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        background: "white",
+      }}
     >
       <option value="Tutti">Tutti pagamenti</option>
       <option value="Non pagato">Non pagato</option>
@@ -1632,7 +1692,7 @@ maxWidth: "90%",
     </select>
 
     <button
-      style={{ marginLeft: "10px" }}
+      type="button"
       onClick={() => {
         setStampaElencoLavori(true);
 
@@ -1641,10 +1701,19 @@ maxWidth: "90%",
           setStampaElencoLavori(false);
         }, 300);
       }}
+      style={{
+        padding: "8px 14px",
+        border: "none",
+        borderRadius: "8px",
+        background: "#2563eb",
+        color: "white",
+        fontWeight: "700",
+        cursor: "pointer",
+      }}
     >
-      📄 PDF Lavori aperti
+      PDF Lavori aperti
     </button>
-  </>
+  </div>
 )}
 
 {vista === "rimessaggi" && (
@@ -1715,10 +1784,19 @@ maxWidth: "90%",
     }}
   />
 </div>
-   </>
+      </>
 )}
-</div>
-        <main className="layout">
+
+<main
+  className="layout"
+  style={{
+    gridTemplateColumns:
+  vista === "clienti" || vista === "incassi"
+    ? "1fr"
+    : "minmax(0, 1fr) minmax(620px, 1.35fr)",
+  }}
+>
+
           {vista === "lavori" && (
   <section className="panel">
     <h2>Nuovo lavoro</h2>
@@ -1773,36 +1851,51 @@ maxWidth: "90%",
         value={form.titolo || ""}
         onChange={(v) => setForm({ ...form, titolo: v })}
       />
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "12px",
+  }}
+>
+  <Input
+    label="Cliente *"
+    value={form.cliente || ""}
+    onChange={(v) => setForm({ ...form, cliente: v })}
+  />
 
-      <Input
-        label="Cliente *"
-        value={form.cliente || ""}
-        onChange={(v) => setForm({ ...form, cliente: v })}
-      />
+  <Input
+    label="Telefono"
+    value={form.telefono || ""}
+    onChange={(v) => setForm({ ...form, telefono: v })}
+  />
+</div>
 
-      <Input
-        label="Telefono"
-        value={form.telefono || ""}
-        onChange={(v) => setForm({ ...form, telefono: v })}
-      />
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: "12px",
+  }}
+>
+  <Input
+    label="Imbarcazione"
+    value={form.barca || ""}
+    onChange={(v) => setForm({ ...form, barca: v })}
+  />
 
-      <Input
-        label="Imbarcazione"
-        value={form.barca || ""}
-        onChange={(v) => setForm({ ...form, barca: v })}
-      />
+  <Input
+    label="Motore"
+    value={form.motore || ""}
+    onChange={(v) => setForm({ ...form, motore: v })}
+  />
 
-      <Input
-        label="Motore"
-        value={form.motore || ""}
-        onChange={(v) => setForm({ ...form, motore: v })}
-      />
-
-      <Input
-        label="Matricola"
-        value={form.matricola || ""}
-        onChange={(v) => setForm({ ...form, matricola: v })}
-      />
+  <Input
+    label="Matricola"
+    value={form.matricola || ""}
+    onChange={(v) => setForm({ ...form, matricola: v })}
+  />
+</div>
 
       <Textarea
         label="Lavoro richiesto *"
@@ -2081,7 +2174,7 @@ maxWidth: "90%",
     </form>
   </section>
 )}
-          {vista === "lavori" && (
+          {(vista === "lavori" || vista === "incassi") && (
   <div className="cards">
 
 <input
@@ -2299,90 +2392,47 @@ maxWidth: "90%",
     ))}
   </datalist>
 </label>
+<div
+  className="twoCols"
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "12px",
+    width: "100%",
+  }}
+>
+  <Input
+    label="Cliente *"
+    value={form.cliente || ""}
+    onChange={(v) => setForm({ ...form, cliente: v })}
+  />
+
+  <Input
+    label="Telefono"
+    value={form.telefono || ""}
+    onChange={(v) => setForm({ ...form, telefono: v })}
+  />
+</div>
+
+<div className="twoCols">
+  <Input
+    label="Imbarcazione"
+    value={form.barca || ""}
+    onChange={(v) => setForm({ ...form, barca: v })}
+  />
+
+  <Input
+    label="Motore"
+    value={form.motore || ""}
+    onChange={(v) => setForm({ ...form, motore: v })}
+  />
+</div>
+
 <Input
-  label="Cliente *"
-  value={formPreventivo.cliente}
-  onChange={(v) =>
-    setFormPreventivo({ ...formPreventivo, cliente: v })
-  }
+  label="Matricola"
+  value={form.matricola || ""}
+  onChange={(v) => setForm({ ...form, matricola: v })}
 />
-<Input
-  label="Titolo preventivo"
-  value={formPreventivo.titolo || ""}
-  onChange={(v) =>
-    setFormPreventivo({ ...formPreventivo, titolo: v })
-  }
-/>
-                <Input label="Telefono" value={formPreventivo.telefono} onChange={(v) => setFormPreventivo({ ...formPreventivo, telefono: v })} />
-                <Input label="Imbarcazione" value={formPreventivo.barca} onChange={(v) => setFormPreventivo({ ...formPreventivo, barca: v })} />
-                <Input label="Motore" value={formPreventivo.motore} onChange={(v) => setFormPreventivo({ ...formPreventivo, motore: v })} />
-                <Input label="Matricola" value={formPreventivo.matricola} onChange={(v) => setFormPreventivo({ ...formPreventivo, matricola: v })} />
-                <Textarea label="Descrizione lavori *" value={formPreventivo.descrizione} onChange={(v) => setFormPreventivo({ ...formPreventivo, descrizione: v })} />
-                <Textarea label="Ricambi" value={formPreventivo.ricambi} onChange={(v) => setFormPreventivo({ ...formPreventivo, ricambi: v })} />
-
-                <div className="twoCols">
-                  <Input label="Costo ricambi euro" type="number" value={formPreventivo.costoRicambi} onChange={(v) => setFormPreventivo({ ...formPreventivo, costoRicambi: v })} />
-                  <Input label="Ore manodopera" type="number" value={formPreventivo.oreManodopera} onChange={(v) => setFormPreventivo({ ...formPreventivo, oreManodopera: v })} />
-                </div>
-
-                <div className="twoCols">
-                  <Input label="Prezzo ora euro" type="number" value={formPreventivo.prezzoOra} onChange={(v) => setFormPreventivo({ ...formPreventivo, prezzoOra: v })} />
-                  <Input label="Altro euro" type="number" value={formPreventivo.altro} onChange={(v) => setFormPreventivo({ ...formPreventivo, altro: v })} />
-                </div>
-
-                                <Textarea label="Note" value={formPreventivo.note} onChange={(v) => setFormPreventivo({ ...formPreventivo, note: v })} />
-
-                <div className="totalBox">
-                  Totale preventivo: <strong>{euro(totaleFormPreventivo)}</strong>
-                </div>
-
-                <button className="primary" type="submit">
-                  {preventivoInModifica ? "Aggiorna preventivo" : "Salva preventivo"}
-                </button>
-
-                {preventivoInModifica && (
-                  <button className="smallBtn" type="button" onClick={annullaModificaPreventivo}>
-                    Annulla modifica
-                  </button>
-                )}
-              </form>
-            </section>
-          )}
-
-          {vista === "clienti" && (
-  <section className="panel">
-    <h2>Nuovo cliente</h2>
-
-    <form onSubmit={salvaCliente} className="form">
-      <Input
-        label="Cliente"
-        value={formCliente.cliente}
-        onChange={(v) => setFormCliente({ ...formCliente, cliente: v })}
-      />
-
-      <Input
-        label="Telefono"
-        value={formCliente.telefono}
-        onChange={(v) => setFormCliente({ ...formCliente, telefono: v })}
-      />
-
-      <Input
-        label="Imbarcazione"
-        value={formCliente.barca}
-        onChange={(v) => setFormCliente({ ...formCliente, barca: v })}
-      />
-
-      <Input
-        label="Motore"
-        value={formCliente.motore}
-        onChange={(v) => setFormCliente({ ...formCliente, motore: v })}
-      />
-
-      <Input
-        label="Matricola"
-        value={formCliente.matricola}
-        onChange={(v) => setFormCliente({ ...formCliente, matricola: v })}
-      />
 
       <Textarea
         label="Note"
@@ -2397,7 +2447,216 @@ maxWidth: "90%",
   </section>
 )}
 {vista === "clienti" && (
-  <div className="cards">
+  <div
+    className="cards"
+    style={{
+      width: "100%",
+      maxWidth: "none",
+    }}
+  >
+    <div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    marginBottom: "14px",
+  }}
+>
+  <button
+    type="button"
+    className="primary"
+    onClick={() => {
+  setFormCliente({
+    cliente: "",
+    telefono: "",
+    barca: "",
+    motore: "",
+    matricola: "",
+    note: "",
+  });
+  setClienteInModifica(null);
+  setMostraFormCliente(true);
+}}
+  >
+    + Nuovo cliente
+  </button>
+</div>
+{mostraFormCliente && (
+  <form
+  className="clientForm"
+    onSubmit={salvaCliente}
+    style={{
+      background: "#ffffff",
+      border: "1px solid #e2e8f0",
+      borderRadius: "14px",
+      padding: "24px",
+      marginBottom: "20px",
+      boxShadow: "0 4px 14px rgba(15, 23, 42, 0.06)",
+    }}
+  >
+    {/* Intestazione */}
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "22px",
+        paddingBottom: "14px",
+        borderBottom: "1px solid #e2e8f0",
+      }}
+    >
+      <div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "20px",
+            color: "#0f172a",
+          }}
+        >
+          Nuovo cliente
+        </h2>
+
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#64748b",
+          }}
+        >
+          Inserisci i dati anagrafici e dell'imbarcazione
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setMostraFormCliente(false)}
+        style={{
+          border: "none",
+          background: "#f1f5f9",
+          borderRadius: "8px",
+          width: "34px",
+          height: "34px",
+          cursor: "pointer",
+          fontSize: "18px",
+          color: "#475569",
+        }}
+      >
+        ×
+      </button>
+    </div>
+
+    {/* Dati cliente */}
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr 1fr",
+        gap: "14px",
+        marginBottom: "16px",
+      }}
+    >
+      <Input
+        label="Nome e cognome *"
+        value={formCliente.cliente}
+        onChange={(v) =>
+          setFormCliente({ ...formCliente, cliente: v })
+        }
+      />
+
+  
+
+      <Input
+        label="Telefono"
+        value={formCliente.telefono}
+        onChange={(v) =>
+          setFormCliente({ ...formCliente, telefono: v })
+        }
+      />
+    </div>
+
+    {/* Dati imbarcazione */}
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr 1fr",
+        gap: "14px",
+        marginBottom: "16px",
+      }}
+    >
+      <Input
+        label="Imbarcazione"
+        value={formCliente.barca}
+        onChange={(v) =>
+          setFormCliente({ ...formCliente, barca: v })
+        }
+      />
+
+      <Input
+        label="Motore"
+        value={formCliente.motore}
+        onChange={(v) =>
+          setFormCliente({ ...formCliente, motore: v })
+        }
+      />
+
+      <Input
+        label="Matricola"
+        value={formCliente.matricola}
+        onChange={(v) =>
+          setFormCliente({ ...formCliente, matricola: v })
+        }
+      />
+    </div>
+
+    {/* Note */}
+    <div style={{ marginBottom: "20px" }}>
+      <Textarea
+        label="Note"
+        value={formCliente.note}
+        onChange={(v) =>
+          setFormCliente({ ...formCliente, note: v })
+        }
+      />
+    </div>
+
+    {/* Pulsanti */}
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: "10px",
+        paddingTop: "16px",
+        borderTop: "1px solid #e2e8f0",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setMostraFormCliente(false)}
+        style={{
+          padding: "9px 18px",
+          border: "1px solid #cbd5e1",
+          borderRadius: "8px",
+          background: "#ffffff",
+          cursor: "pointer",
+          fontWeight: "600",
+          color: "#475569",
+        }}
+      >
+        Annulla
+      </button>
+
+      <button
+        type="submit"
+        className="primary"
+        style={{
+          padding: "9px 20px",
+          borderRadius: "8px",
+          fontWeight: "700",
+        }}
+      >
+        Salva cliente
+      </button>
+    </div>
+  </form>
+)}
 
     <input
       type="text"
@@ -2481,7 +2740,7 @@ const saldoTotaleCliente =
 
       return (
         <article
-  className="job"
+  className="job clientJob"
   key={cliente.firebaseId}
 >
   <div
@@ -2493,7 +2752,16 @@ const saldoTotaleCliente =
     }}
   >
     <div>
-      <strong>{cliente.cliente}</strong>
+      <strong
+  style={{
+    display: "block",
+    textAlign: "left",
+    marginBottom: "8px",
+    fontSize: "18px",
+  }}
+>
+  {cliente.cliente}
+</strong>
 
       <div
         style={{
@@ -2502,61 +2770,63 @@ const saldoTotaleCliente =
           marginTop: "4px",
         }}
       >
-        {cliente.barca || "-"} | {cliente.motore || "-"}
-      </div>
-
-      <div
-        style={{
-          fontSize: "13px",
-          color: "#666",
-        }}
-      >
-       Lavori: {lavoriCliente.length} | Preventivi: {preventiviCliente.length} | Rimessaggi: {rimessaggiCliente.length}
-      <div
+        <div
   style={{
+    display: "grid",
+    gridTemplateColumns: "320px 220px",
+    gap: "8px 28px",
     marginTop: "8px",
     fontSize: "13px",
-    lineHeight: "1.6",
+    color: "#666",
+    alignItems: "center",
   }}
 >
   <div>
+    Barca / Motore:{" "}
+    <strong>
+      {cliente.barca || "-"} | {cliente.motore || "-"}
+    </strong>
+  </div>
+
+  <div>
     Saldo lavori: <strong>{euro(saldoLavoriCliente)}</strong>
+  </div>
+
+  <div>
+    Lavori: <strong>{lavoriCliente.length}</strong> | Preventivi:{" "}
+    <strong>{preventiviCliente.length}</strong> | Rimessaggi:{" "}
+    <strong>{rimessaggiCliente.length}</strong>
   </div>
 
   <div>
     Saldo rimessaggi: <strong>{euro(saldoRimessaggiCliente)}</strong>
   </div>
 
-  <div
-  style={{
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    flexWrap: "wrap",
-  }}
->
-  <span>
-    Saldo totale: <strong>{euro(saldoTotaleCliente)}</strong>
-  </span>
+  <div>
+    Stato:
+    <span
+      style={{
+        marginLeft: "8px",
+        padding: "3px 8px",
+        borderRadius: "999px",
+        fontSize: "11px",
+        fontWeight: "700",
+        background:
+          saldoTotaleCliente > 0 ? "#fee2e2" : "#dcfce7",
+        color:
+          saldoTotaleCliente > 0 ? "#dc2626" : "#15803d",
+      }}
+    >
+      {saldoTotaleCliente > 0 ? "DA INCASSARE" : "IN REGOLA"}
+    </span>
+  </div>
 
-  <span
-    style={{
-      padding: "3px 8px",
-      borderRadius: "999px",
-      fontSize: "11px",
-      fontWeight: "700",
-      background:
-        saldoTotaleCliente > 0 ? "#fee2e2" : "#dcfce7",
-      color:
-        saldoTotaleCliente > 0 ? "#dc2626" : "#15803d",
-    }}
-  >
-    {saldoTotaleCliente > 0 ? "DA INCASSARE" : "IN REGOLA"}
-  </span>
+  <div>
+    Saldo totale: <strong>{euro(saldoTotaleCliente)}</strong>
+  </div>
 </div>
 </div>
-      </div>
-    </div>
+</div>
 
     <div className="clientActions">
     <button

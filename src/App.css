@@ -106,7 +106,8 @@ body {
 
 /* Layout: più spazio al form lavoro, meno spazio alle schede */
 .layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(620px, 1.35fr);
   gap: 24px;
   align-items: flex-start;
 }
@@ -197,7 +198,7 @@ body {
   gap: 15px;
   flex: 1;
   min-width: 0;
-  width: auto;
+  width: 100%;
 }
 
 .job {
@@ -652,8 +653,33 @@ body {
 /* layout equilibrato */
 
 .panel {
-  width: 820px !important;
-  min-width: 820px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+.panel h2 {
+  margin: 0 0 18px;
+  font-size: 20px;
+  color: #0f172a;
+}
+
+.panel .form {
+  gap: 12px;
+}
+
+.panel input,
+.panel select {
+  font-size: 13px;
+  padding: 9px 11px;
+  min-height: 38px;
+}
+
+.panel textarea {
+  font-size: 13px;
+  padding: 9px 11px;
 }
 
 .content {
@@ -932,4 +958,200 @@ input[type="number"] {
 .interventiPrint {
   break-inside: avoid;
   page-break-inside: avoid;
+}
+.sidebarMenu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 220px;
+  height: 100vh;
+  background: #0f2f57;
+  padding: 24px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1000;
+}
+
+.sidebarMenu button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #dbeafe;
+  text-align: left;
+  padding: 11px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #dbeafe;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sidebarMenu button:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+}
+
+.sidebarMenu button.active {
+  background: #1d4ed8;
+  color: #ffffff;
+  font-weight: 700;
+}
+.sidebarBrand {
+  padding: 6px 10px 22px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.sidebarTitle {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+}
+
+.sidebarSubtitle {
+  color: #93c5fd;
+  font-size: 12px;
+  margin-top: 3px;
+}
+.header {
+  background: #ffffff;
+  padding: 16px 24px;
+  border-radius: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: none;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 20px;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.header p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+}
+
+.userEmail {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.userRole {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.panel .twoCols {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 12px !important;
+}
+
+.panel .twoCols > * {
+  min-width: 0;
+}
+.sidebarStatBtn {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  margin-top: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #dbeafe;
+  cursor: pointer;
+}
+
+.sidebarStatBtn span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sidebarStatBtn strong {
+  font-size: 18px;
+  color: #ffffff;
+}
+
+.sidebarStatBtn:hover {
+  background: rgba(255, 255, 255, 0.10);
+}
+.clientJob {
+  width: 100%;
+  max-width: none;
+}
+.sidebarStatsBottom {
+  margin-top: auto;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* FORM NUOVO CLIENTE */
+
+.clientForm {
+  max-width: 950px;
+  margin: 0 auto 20px;
+}
+
+.clientForm label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.clientForm input,
+.clientForm select,
+.clientForm textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 14px;
+}
+
+.clientForm textarea {
+  min-height: 60px;
+  resize: vertical;
 }
