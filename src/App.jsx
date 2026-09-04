@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { jsPDF } from "jspdf";
 import {
   collection,
   addDoc,
@@ -69,6 +70,7 @@ export default function App() {
   const [preventivi, setPreventivi] = useState([]);
   const [rimessaggi, setRimessaggi] = useState([]);
   const [clientiDb, setClientiDb] = useState([]);
+  const [allievi, setAllievi] = useState([]);
   const [caricamento, setCaricamento] = useState(true);
   const [utente, setUtente] = useState(null);
   const [email, setEmail] = useState("");
@@ -93,6 +95,31 @@ const [clienteInModifica, setClienteInModifica] = useState(null);
 const [clienteAperto, setClienteAperto] = useState(null);
 const [ordinaClientiPerSaldo, setOrdinaClientiPerSaldo] = useState(false);
 const [ricercaGlobale, setRicercaGlobale] = useState("");
+const [ricercaAllievi, setRicercaAllievi] = useState("");
+const [mostraFormAllievo, setMostraFormAllievo] = useState(false);
+const [nuovoVersamento, setNuovoVersamento] = useState({
+  data: "",
+  importo: "",
+  metodo: "",
+});
+const [allievoInModifica, setAllievoInModifica] = useState(null);
+const [formAllievo, setFormAllievo] = useState({
+  nome: "",
+  cognome: "",
+  luogoNascita: "",
+  provinciaNascita: "",
+  dataNascita: "",
+  indirizzo: "",
+  civico: "",
+  cap: "",
+  citta: "",
+  provincia: "",
+  codiceFiscale: "",
+  cellulare: "",
+  email: "",
+  costoCorso: "",
+versamenti: [],
+});
   const [preventivoInModifica, setPreventivoInModifica] = useState(null);
   const [ricerca, setRicerca] = useState("");
   const [ricercaClienteLavoro, setRicercaClienteLavoro] = useState("");
@@ -106,6 +133,7 @@ const [filtroAnnoRimessaggi, setFiltroAnnoRimessaggi] = useState(
 );
   const [filtroPagamentoRimessaggi, setFiltroPagamentoRimessaggi] = useState("Tutti");
   const [vista, setVista] = useState("dashboard");
+  const [sezione, setSezione] = useState("cantiere");
   const [preventivoDaStampare, setPreventivoDaStampare] = useState(null);
   const [rimessaggioDaStampare, setRimessaggioDaStampare] = useState(null);
   const [lavoroDaStampare, setLavoroDaStampare] = useState(null);
@@ -173,7 +201,17 @@ const stopRimessaggi = onSnapshot(
     setRimessaggi(dati);
   }
 );
+const stopAllievi = onSnapshot(
+  collection(db, "allievi"),
+  (snapshot) => {
+    const dati = snapshot.docs.map((documento) => ({
+      ...documento.data(),
+      firebaseId: documento.id,
+    }));
 
+    setAllievi(dati);
+  }
+);
     const stopPreventivi = onSnapshot(collection(db, "preventivi"), (snapshot) => {
       const dati = snapshot.docs.map((documento) => ({
         firebaseId: documento.id,
@@ -195,6 +233,7 @@ const stopRimessaggi = onSnapshot(
   stopPreventivi();
   stopClienti();
   stopRimessaggi();
+  stopAllievi();
 };
   }, [utente]);
 
@@ -213,6 +252,209 @@ const stopRimessaggi = onSnapshot(
   async function esci() {
     await signOut(auth);
   }
+  async function generaRicevutaVersamento(allievo, versamento, index) {
+  const pdf = new jsPDF();
+  const logo = await fetch("/snz2.jpg")
+  .then((response) => response.blob())
+  .then(
+    (blob) =>
+      new Promise((resolve) => {
+        const reader = new FileReader();
+
+        reader.onloadend = () => resolve(reader.result);
+
+        reader.readAsDataURL(blob);
+      })
+  );
+
+  const nomeCompleto =
+    `${allievo.nome || ""} ${allievo.cognome || ""}`.trim();
+
+  const dataPagamento = versamento.data
+    ? new Date(
+        versamento.data + "T00:00:00"
+      ).toLocaleDateString("it-IT")
+    : "-";
+
+  const importo = Number(versamento.importo || 0).toFixed(2);
+  const totaleVersatoFinoAQui = (allievo.versamenti || [])
+  .slice(0, index + 1)
+  .reduce(
+    (totale, v) => totale + Number(v.importo || 0),
+    0
+  );
+
+const saldoMancante = Math.max(
+  0,
+  Number(allievo.costoCorso || 0) - totaleVersatoFinoAQui
+).toFixed(2);
+
+  pdf.addImage(
+  logo,
+  "JPEG",
+  20,
+  15,
+  30,
+  30
+);
+
+pdf.setFont("helvetica", "bold");
+pdf.setFontSize(12);
+
+pdf.text(
+  "SCUOLA NAUTICA ZENITH",
+  35,
+  54,
+  {
+    align: "center",
+  }
+);
+
+pdf.setFont("helvetica", "bold");
+pdf.setFontSize(16);
+
+pdf.text("RICEVUTA DI PAGAMENTO", 105, 75, {
+  align: "center",
+});
+
+pdf.setFont("helvetica", "normal");
+pdf.setFontSize(11);
+
+pdf.text(
+  `Data pagamento: ${dataPagamento}`,
+  190,
+  25,
+  {
+    align: "right",
+  }
+);
+
+pdf.line(20, 82, 190, 82);
+
+pdf.text("Ricevuto da:", 20, 95);
+
+pdf.setFont("helvetica", "bold");
+pdf.text(nomeCompleto || "-", 50, 95);
+
+pdf.setFont("helvetica", "normal");
+
+if (allievo.codiceFiscale) {
+  pdf.text(
+    `Codice fiscale: ${allievo.codiceFiscale}`,
+    20,
+    110
+  );
+}
+
+pdf.text("Importo versato:", 20, 135);
+
+pdf.setFont("helvetica", "bold");
+pdf.setFontSize(14);
+pdf.text(`EUR ${importo}`, 60, 135);
+
+pdf.setFont("helvetica", "normal");
+pdf.setFontSize(11);
+
+pdf.text(
+  `Metodo di pagamento: ${versamento.metodo || "-"}`,
+  20,
+  150
+);
+
+pdf.setFont("helvetica", "bold");
+
+pdf.text(
+  `Importo residuo: EUR ${saldoMancante}`,
+  20,
+  175
+);
+
+pdf.setFont("helvetica", "normal");
+
+pdf.text(
+  "Pagamento relativo al corso per il conseguimento della patente nautica.",
+  20,
+  195
+);
+
+pdf.line(20, 215, 190, 215);
+
+pdf.setFontSize(9);
+
+pdf.text(
+  "Documento generato dal Gestionale Scuola Nautica Zenith",
+  105,
+  228,
+  {
+    align: "center",
+  }
+);
+
+  const nomeFile =
+    `Ricevuta_${nomeCompleto.replace(/\s+/g, "_")}_${dataPagamento.replace(
+      /\//g,
+      "-"
+    )}.pdf`;
+
+  pdf.save(nomeFile);
+}
+  async function salvaAllievo(e) {
+  e.preventDefault();
+
+  if (!formAllievo.nome.trim() || !formAllievo.cognome.trim()) {
+    alert("Inserisci almeno nome e cognome");
+    return;
+  }
+
+  if (allievoInModifica) {
+    await updateDoc(
+      doc(db, "allievi", allievoInModifica),
+      formAllievo
+    );
+
+    alert("Allievo aggiornato");
+    setAllievoInModifica(null);
+  } else {
+    await addDoc(collection(db, "allievi"), {
+      ...formAllievo,
+      creatoIl: new Date().toISOString(),
+    });
+
+    alert("Allievo salvato");
+  }
+
+  setFormAllievo({
+    nome: "",
+    cognome: "",
+    luogoNascita: "",
+    provinciaNascita: "",
+    dataNascita: "",
+    indirizzo: "",
+    civico: "",
+    cap: "",
+    citta: "",
+    provincia: "",
+    codiceFiscale: "",
+    cellulare: "",
+    email: "",
+    costoCorso: "",
+versamenti: [],
+    
+  });
+
+  setMostraFormAllievo(false);
+}
+async function eliminaAllievo(allievo) {
+  const conferma = window.confirm(
+    `Vuoi eliminare definitivamente ${allievo.nome} ${allievo.cognome}?`
+  );
+
+  if (!conferma) return;
+
+  await deleteDoc(doc(db, "allievi", allievo.firebaseId));
+
+  alert("Allievo eliminato");
+}
 async function salvaCliente(e) {
   e.preventDefault();
 
@@ -1377,8 +1619,17 @@ if (ordinaClientiPerSaldo) {
 >
         <header className="header">
   <div>
-    <h1>Gestionale Cantiere Nautico</h1>
-    <p>Clienti, lavori officina, preventivi e rimessaggi</p>
+    <h1>
+  {sezione === "scuola"
+    ? "Gestionale Scuola Nautica"
+    : "Gestionale Cantiere Nautico"}
+</h1>
+
+<p>
+  {sezione === "scuola"
+    ? "Allievi, documenti e incassi"
+    : "Clienti, lavori officina, preventivi e rimessaggi"}
+</p>
   </div>
 
   <div className="headerActions">
@@ -1395,67 +1646,157 @@ if (ordinaClientiPerSaldo) {
 
         
         
+<div className="sidebarMenu">
+       <div className="sidebarBrand">
+  <div className="sidebarTitle">SEA SRLS</div>
 
-        <div className="sidebarMenu">
-  <div className="sidebarBrand">
-    <div className="sidebarTitle">SEA SRLS</div>
-    <div className="sidebarSubtitle">Gestionale Cantiere</div>
+  <div className="sidebarSectionSwitch">
+    <button
+      type="button"
+      className={sezione === "cantiere" ? "activeSection" : ""}
+      onClick={() => {
+        setSezione("cantiere");
+        setVista("dashboard");
+      }}
+    >
+      Cantiere
+    </button>
+
+    <button
+      type="button"
+      className={sezione === "scuola" ? "activeSection" : ""}
+      onClick={() => {
+        setSezione("scuola");
+        setVista("dashboardScuola");
+      }}
+    >
+      Scuola
+    </button>
   </div>
+</div>
 
+
+  {sezione === "cantiere" && (
   <button
     className={vista === "dashboard" ? "active" : ""}
     onClick={() => setVista("dashboard")}
   >
     Dashboard
   </button>
+)}
+  {sezione === "cantiere" && (
   <button
     className={vista === "clienti" ? "active" : ""}
     onClick={() => setVista("clienti")}
   >
     Clienti
   </button>
+)}
 
   
 
-<button
-  className={vista === "lavori" ? "active" : ""}
-  onClick={() => {
-    setVista("lavori");
-    setForm(nuovoLavoroVuoto());
-    setLavoroInModifica(null);
-  }}
+{sezione === "cantiere" && (
+  <button
+    className={vista === "lavori" ? "active" : ""}
+    onClick={() => {
+      setVista("lavori");
+      setForm(nuovoLavoroVuoto());
+      setLavoroInModifica(null);
+    }}
   >
-    
     Lavori
   </button>
-<button
-  className={vista === "rimessaggi" ? "active" : ""}
-  onClick={() => {
-  setVista("rimessaggi");
-  setForm(nuovoLavoroVuoto());
-  setRimessaggioInModifica(null);
-}}
->
-  Rimessaggi
-</button>
+)}
+{sezione === "cantiere" && (
+  <button
+    className={vista === "rimessaggi" ? "active" : ""}
+    onClick={() => {
+      setVista("rimessaggi");
+      setForm(nuovoLavoroVuoto());
+      setRimessaggioInModifica(null);
+    }}
+  >
+    Rimessaggi
+  </button>
+)}
 
-    <button
+    {sezione === "cantiere" && (
+  <button
     className={vista === "preventivi" ? "active" : ""}
     onClick={() => {
-  setVista("preventivi");
-  setFormPreventivo(nuovoPreventivoVuoto());
-  setPreventivoInModifica(null);
-}}
+      setVista("preventivi");
+      setFormPreventivo(nuovoPreventivoVuoto());
+      setPreventivoInModifica(null);
+    }}
   >
     Preventivi
   </button>
+)}
+{sezione === "scuola" && (
+  <>
+    <button
+      className={vista === "allievi" ? "active" : ""}
+      onClick={() => setVista("allievi")}
+    >
+      Allievi
+    </button>
+
+    <button
+      className={vista === "incassiScuola" ? "active" : ""}
+      onClick={() => setVista("incassiScuola")}
+    >
+            Incassi
+    </button>
+
+    <div
+      style={{
+        height: "1px",
+        background: "rgba(255, 255, 255, 0.18)",
+        margin: "8px 6px",
+      }}
+    />
+<button
+  className={vista === "iscrizioni" ? "active" : ""}
+  onClick={() => setVista("iscrizioni")}
+>
+  Iscrizioni
+</button>
+  </>
+)}
+{sezione === "scuola" && (
+  <div
+    className="sidebarSearch"
+    style={{
+      position: "relative",
+      zIndex: 50,
+      width: "100%",
+      marginTop: "12px",
+    }}
+  >
+    <input
+      type="text"
+      placeholder="Cerca allievo: nome, cognome, codice fiscale, cellulare..."
+      value={ricercaAllievi}
+      onChange={(e) => setRicercaAllievi(e.target.value)}
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "10px",
+        fontSize: "14px",
+      }}
+    />
+  </div>
+)}
+
  <div
   className="sidebarSearch"
   style={{
-    position: "relative",
-    zIndex: 50,
-    width: "100%",
-  }}
+  position: "relative",
+  zIndex: 50,
+  width: "100%",
+  display: sezione === "cantiere" ? "block" : "none",
+}}
 >
   <input
     type="text"
@@ -1791,11 +2132,960 @@ left: "250px",
   className="layout"
   style={{
     gridTemplateColumns:
-  vista === "clienti" || vista === "incassi"
+  vista === "clienti" ||
+  vista === "incassi" ||
+  vista === "allievi" ||
+  vista === "incassiScuola"
     ? "1fr"
     : "minmax(0, 1fr) minmax(620px, 1.35fr)",
   }}
 >
+  {sezione === "scuola" && vista === "allievi" && (
+  <section
+    style={{
+      width: "100%",
+      background: "#ffffff",
+      borderRadius: "14px",
+      padding: "22px",
+      boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "18px",
+      }}
+    >
+      <div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "22px",
+            color: "#0f172a",
+          }}
+        >
+          Allievi
+        </h2>
+
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#64748b",
+          }}
+        >
+          Archivio allievi della scuola nautica
+        </div>
+      </div>
+
+      <button
+  type="button"
+  className="primary"
+  onClick={() => setMostraFormAllievo(true)}
+>
+  + Nuovo allievo
+</button>
+    </div>
+
+    {!mostraFormAllievo && (
+  <>
+    {allievi.length === 0 ? (
+      <div
+        style={{
+          padding: "30px",
+          textAlign: "center",
+          color: "#94a3b8",
+          border: "1px dashed #cbd5e1",
+          borderRadius: "10px",
+        }}
+      >
+        Nessun allievo inserito
+      </div>
+    ) : (
+      <div
+        style={{
+          display: "grid",
+          gap: "12px",
+        }}
+      >
+        {allievi.map((allievo) => (
+  <div
+    key={allievo.firebaseId}
+    style={{
+      background: "#ffffff",
+      border: "1px solid #e2e8f0",
+      borderRadius: "12px",
+      padding: "16px 18px",
+      display: "grid",
+      gridTemplateColumns: "1.2fr 1fr 1fr 190px",
+      gap: "16px",
+      alignItems: "center",
+    }}
+  >
+    <div>
+      <strong
+        style={{
+          fontSize: "16px",
+          color: "#0f172a",
+        }}
+      >
+        {allievo.nome} {allievo.cognome}
+      </strong>
+
+      <div
+        style={{
+          marginTop: "4px",
+          fontSize: "13px",
+          color: "#64748b",
+        }}
+      >
+        {allievo.codiceFiscale || "-"}
+      </div>
+    </div>
+
+    <div
+      style={{
+        fontSize: "14px",
+        color: "#334155",
+      }}
+    >
+      {allievo.cellulare || "-"}
+    </div>
+
+    <div
+      style={{
+        fontSize: "14px",
+        color: "#334155",
+        textAlign: "right",
+      }}
+    >
+      {allievo.citta || "-"}
+    </div>
+
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: "8px",
+      }}
+    >
+      <button
+        type="button"
+        className="clientBtn editBtn"
+        onClick={() => {
+          setFormAllievo({
+            nome: allievo.nome || "",
+            cognome: allievo.cognome || "",
+            luogoNascita: allievo.luogoNascita || "",
+provinciaNascita: allievo.provinciaNascita || "",
+dataNascita: allievo.dataNascita || "",
+            indirizzo: allievo.indirizzo || "",
+            civico: allievo.civico || "",
+            cap: allievo.cap || "",
+            citta: allievo.citta || "",
+            provincia: allievo.provincia || "",
+            codiceFiscale: allievo.codiceFiscale || "",
+            cellulare: allievo.cellulare || "",
+            email: allievo.email || "",
+            costoCorso: allievo.costoCorso || "",
+versamenti: allievo.versamenti || [],
+          });
+
+          setAllievoInModifica(allievo.firebaseId);
+          setMostraFormAllievo(true);
+        }}
+      >
+        Modifica
+      </button>
+
+      <button
+        type="button"
+        className="clientBtn"
+        style={{
+          background: "#dc2626",
+          color: "white",
+        }}
+        onClick={() => eliminaAllievo(allievo)}
+      >
+        Elimina
+      </button>
+    </div>
+  </div>
+))}
+      </div>
+    )}
+  </>
+)}
+
+{mostraFormAllievo && (
+  <form
+  onSubmit={salvaAllievo}
+  style={{
+      background: "#f8fafc",
+      border: "1px solid #e2e8f0",
+      borderRadius: "12px",
+      padding: "20px",
+      marginBottom: "18px",
+      
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "18px",
+      }}
+    >
+      <h3
+        style={{
+          margin: 0,
+          fontSize: "18px",
+          color: "#0f172a",
+        }}
+      >
+        {allievoInModifica ? "Modifica allievo" : "Nuovo allievo"}
+      </h3>
+
+      <button
+        type="button"
+        onClick={() => setMostraFormAllievo(false)}
+        style={{
+          border: "none",
+          background: "transparent",
+          fontSize: "20px",
+          cursor: "pointer",
+        }}
+      >
+        ×
+      </button>
+    </div>
+    <div
+  style={{
+    marginBottom: "12px",
+    fontSize: "13px",
+    fontWeight: "800",
+    color: "#2563eb",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  }}
+>
+  Dati anagrafici
+</div>
+
+   <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr 120px 0.5fr",
+    gap: "16px",
+    width: "100%",
+  }}
+>
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+  <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+    Nome
+  </span>
+
+  <input
+    type="text"
+    value={formAllievo.nome}
+    onChange={(e) =>
+      setFormAllievo({
+        ...formAllievo,
+        nome: e.target.value,
+      })
+    }
+    style={{
+      width: "100%",
+      boxSizing: "border-box",
+      padding: "10px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+    }}
+  />
+</label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Cognome
+    </span>
+    <input
+  type="text"
+  value={formAllievo.cognome}
+  onChange={(e) =>
+    setFormAllievo({
+      ...formAllievo,
+      cognome: e.target.value,
+    })
+  }
+  style={{
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "10px 12px",
+    border: "1px solid #cbd5e1",
+    borderRadius: "8px",
+    fontSize: "14px",
+  }}
+/>
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Luogo di nascita
+    </span>
+    <input
+  type="text"
+  value={formAllievo.luogoNascita}
+  onChange={(e) =>
+    setFormAllievo({
+      ...formAllievo,
+      luogoNascita: e.target.value,
+    })
+  }
+  style={{
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "10px 12px",
+    border: "1px solid #cbd5e1",
+    borderRadius: "8px",
+    fontSize: "14px",
+  }}
+/>
+  </label>
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+  <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+    Provincia
+  </span>
+
+  <input
+    type="text"
+    value={formAllievo.provinciaNascita}
+    onChange={(e) =>
+      setFormAllievo({
+        ...formAllievo,
+        provinciaNascita: e.target.value.toUpperCase(),
+      })
+    }
+    maxLength={2}
+    style={{
+      width: "100%",
+      boxSizing: "border-box",
+      padding: "10px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+      textTransform: "uppercase",
+    }}
+  />
+</label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Data di nascita
+    </span>
+    <input
+  type="date"
+  value={formAllievo.dataNascita}
+  onChange={(e) =>
+    setFormAllievo({
+      ...formAllievo,
+      dataNascita: e.target.value,
+    })
+  }
+  style={{
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "10px 12px",
+    border: "1px solid #cbd5e1",
+    borderRadius: "8px",
+    fontSize: "14px",
+  }}
+/>
+  </label>
+</div>
+<div
+  style={{
+    marginTop: "24px",
+    marginBottom: "12px",
+    paddingTop: "16px",
+    borderTop: "1px solid #e2e8f0",
+    fontSize: "13px",
+    fontWeight: "800",
+    color: "#2563eb",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  }}
+>
+  Residenza
+</div>
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "20% 60px 200px 50px 70px 180px 120px 290px",
+    gap: "16px",
+    marginTop: "18px",
+  }}
+>
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Indirizzo
+    </span>
+
+    <input
+      type="text"
+      value={formAllievo.indirizzo}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          indirizzo: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Civico
+    </span>
+
+    <input
+      type="text"
+      value={formAllievo.civico}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          civico: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Città
+    </span>
+
+    <input
+      type="text"
+      value={formAllievo.citta}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          citta: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Provincia
+    </span>
+
+    <input
+      type="text"
+      value={formAllievo.provincia}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          provincia: e.target.value.toUpperCase(),
+        })
+      }
+      maxLength={2}
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+        textTransform: "uppercase",
+      }}
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      CAP
+    </span>
+
+    <input
+      type="text"
+      value={formAllievo.cap}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          cap: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+  <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+    Codice fiscale
+  </span>
+
+  <input
+    type="text"
+    value={formAllievo.codiceFiscale}
+    onChange={(e) =>
+      setFormAllievo({
+        ...formAllievo,
+        codiceFiscale: e.target.value.toUpperCase(),
+      })
+    }
+    style={{
+      width: "100%",
+      boxSizing: "border-box",
+      padding: "10px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+      textTransform: "uppercase",
+    }}
+  />
+</label>
+
+<label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+  <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+    Cellulare
+  </span>
+
+  <input
+    type="tel"
+    value={formAllievo.cellulare}
+    onChange={(e) =>
+      setFormAllievo({
+        ...formAllievo,
+        cellulare: e.target.value,
+      })
+    }
+    style={{
+      width: "100%",
+      boxSizing: "border-box",
+      padding: "10px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+    }}
+  />
+</label>
+<label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+  <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+    Email
+  </span>
+
+  <input
+    type="email"
+    value={formAllievo.email}
+    onChange={(e) =>
+      setFormAllievo({
+        ...formAllievo,
+        email: e.target.value,
+      })
+    }
+    style={{
+      width: "100%",
+      boxSizing: "border-box",
+      padding: "10px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+    }}
+  />
+</label>
+</div>
+<div
+  style={{
+    marginTop: "24px",
+    marginBottom: "12px",
+    paddingTop: "16px",
+    borderTop: "1px solid #e2e8f0",
+    fontSize: "13px",
+    fontWeight: "800",
+    color: "#dc2626",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  }}
+>
+  Dati finanziari
+</div>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "180px",
+    gap: "16px",
+  }}
+>
+  <label
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+    }}
+  >
+    <span
+      style={{
+        fontSize: "13px",
+        fontWeight: "700",
+        color: "#334155",
+      }}
+    >
+      Costo corso €
+    </span>
+
+    <input
+      type="number"
+      step="0.01"
+      min="0"
+      value={formAllievo.costoCorso}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          costoCorso: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+</div>
+<div
+  style={{
+    marginTop: "18px",
+  }}
+>
+  <div
+    style={{
+      fontSize: "13px",
+      fontWeight: "800",
+      color: "#334155",
+      marginBottom: "10px",
+    }}
+  >
+    Versamenti
+  </div>
+
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "150px 160px 180px 120px",
+      gap: "12px",
+      alignItems: "end",
+    }}
+  >
+    <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+        Data
+      </span>
+
+      <input
+        type="date"
+        value={nuovoVersamento.data}
+        onChange={(e) =>
+          setNuovoVersamento({
+            ...nuovoVersamento,
+            data: e.target.value,
+          })
+        }
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "10px 12px",
+          border: "1px solid #cbd5e1",
+          borderRadius: "8px",
+          fontSize: "14px",
+        }}
+      />
+    </label>
+
+    <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+        Importo €
+      </span>
+
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        value={nuovoVersamento.importo}
+        onChange={(e) =>
+          setNuovoVersamento({
+            ...nuovoVersamento,
+            importo: e.target.value,
+          })
+        }
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "10px 12px",
+          border: "1px solid #cbd5e1",
+          borderRadius: "8px",
+          fontSize: "14px",
+        }}
+      />
+    </label>
+
+    <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+        Metodo
+      </span>
+
+      <select
+        value={nuovoVersamento.metodo}
+        onChange={(e) =>
+          setNuovoVersamento({
+            ...nuovoVersamento,
+            metodo: e.target.value,
+          })
+        }
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "10px 12px",
+          border: "1px solid #cbd5e1",
+          borderRadius: "8px",
+          fontSize: "14px",
+          background: "white",
+        }}
+      >
+        <option value="">Seleziona</option>
+        <option value="Contanti">Contanti</option>
+        <option value="Bonifico">Bonifico</option>
+        <option value="Carta">Carta</option>
+      </select>
+    </label>
+
+    <button
+      type="button"
+      className="primary"
+      onClick={() => {
+        if (!nuovoVersamento.data || !nuovoVersamento.importo) {
+          alert("Inserisci data e importo");
+          return;
+        }
+
+        setFormAllievo({
+          ...formAllievo,
+          versamenti: [
+            ...(formAllievo.versamenti || []),
+            nuovoVersamento,
+          ],
+        });
+
+        setNuovoVersamento({
+          data: "",
+          importo: "",
+          metodo: "",
+        });
+      }}
+    >
+      + Aggiungi
+    </button>
+  </div>
+</div>
+{(formAllievo.versamenti || []).length > 0 && (
+  <div
+    style={{
+      marginTop: "18px",
+      borderTop: "1px solid #e2e8f0",
+      paddingTop: "14px",
+    }}
+  >
+    {(formAllievo.versamenti || []).map((versamento, index) => (
+      <div
+        key={index}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "150px 160px 180px 220px",
+          gap: "12px",
+          alignItems: "center",
+          padding: "8px 0",
+          borderBottom: "1px solid #e2e8f0",
+        }}
+      >
+        <div>
+  {versamento.data
+    ? new Date(versamento.data + "T00:00:00").toLocaleDateString("it-IT")
+    : "-"}
+</div>
+
+        <div>
+          € {Number(versamento.importo || 0).toFixed(2)}
+        </div>
+
+        <div>{versamento.metodo || "-"}</div>
+
+        <div
+  style={{
+    display: "flex",
+    gap: "8px",
+    justifyContent: "flex-end",
+  }}
+>
+  <button
+    type="button"
+    onClick={() =>
+      generaRicevutaVersamento(
+        formAllievo,
+        versamento,
+        index
+      )
+    }
+    style={{
+      padding: "7px 12px",
+      border: "none",
+      borderRadius: "7px",
+      background: "#2563eb",
+      color: "white",
+      fontWeight: "700",
+      cursor: "pointer",
+    }}
+  >
+    Ricevuta
+  </button>
+
+  <button
+    type="button"
+    onClick={() => {
+      const nuoviVersamenti = [
+        ...(formAllievo.versamenti || []),
+      ];
+
+      nuoviVersamenti.splice(index, 1);
+
+      setFormAllievo({
+        ...formAllievo,
+        versamenti: nuoviVersamenti,
+      });
+    }}
+    style={{
+      padding: "7px 12px",
+      border: "none",
+      borderRadius: "7px",
+      background: "#dc2626",
+      color: "white",
+      fontWeight: "700",
+      cursor: "pointer",
+    }}
+  >
+    Elimina
+  </button>
+</div>
+      </div>
+    ))}
+
+    <div
+      style={{
+        marginTop: "16px",
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: "30px",
+        fontWeight: "700",
+      }}
+    >
+      <div>
+        Totale versato: €
+        {" "}
+        {(formAllievo.versamenti || [])
+          .reduce(
+            (totale, versamento) =>
+              totale + Number(versamento.importo || 0),
+            0
+          )
+          .toFixed(2)}
+      </div>
+
+      <div
+  style={{
+    color:
+      Math.max(
+        0,
+        Number(formAllievo.costoCorso || 0) -
+          (formAllievo.versamenti || []).reduce(
+            (totale, versamento) =>
+              totale + Number(versamento.importo || 0),
+            0
+          )
+      ) > 0
+        ? "#dc2626"
+        : "#334155",
+    fontWeight: "800",
+  }}
+>
+  Saldo mancante: €
+  {" "}
+  {Math.max(
+    0,
+    Number(formAllievo.costoCorso || 0) -
+      (formAllievo.versamenti || []).reduce(
+        (totale, versamento) =>
+          totale + Number(versamento.importo || 0),
+        0
+      )
+  ).toFixed(2)}
+</div>
+    </div>
+  </div>
+)}
+<div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    marginTop: "20px",
+  }}
+>
+  <button type="submit" className="primary">
+  {allievoInModifica ? "Salva modifiche" : "Salva allievo"}
+</button>
+</div>
+</form>
+)}
+
+</section>
+)}
 
           {vista === "lavori" && (
   <section className="panel">

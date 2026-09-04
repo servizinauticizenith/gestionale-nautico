@@ -1155,3 +1155,26 @@ input[type="number"] {
   min-height: 60px;
   resize: vertical;
 }
+.sidebarSectionSwitch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.sidebarSectionSwitch button {
+  padding: 8px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: transparent;
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+
+.sidebarSectionSwitch button.activeSection {
+  background: #2563eb;
+  color: #ffffff;
+}
