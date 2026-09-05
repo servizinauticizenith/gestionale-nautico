@@ -117,6 +117,15 @@ const [formAllievo, setFormAllievo] = useState({
   codiceFiscale: "",
   cellulare: "",
   email: "",
+  documenti: {
+  documentoIdentita: false,
+  codiceFiscale: false,
+  certificatoMedico: false,
+  fototessere: false,
+  bollettini: false,
+  privacy: false,
+  autocertificazione: false,
+},
   costoCorso: "",
 versamenti: [],
 });
@@ -250,22 +259,23 @@ const stopAllievi = onSnapshot(
   }
 
   async function esci() {
-    await signOut(auth);
-  }
-  async function generaRicevutaVersamento(allievo, versamento, index) {
+  await signOut(auth);
+}
+async function generaRicevutaVersamento(allievo, versamento, index) {
   const pdf = new jsPDF();
+
   const logo = await fetch("/snz2.jpg")
-  .then((response) => response.blob())
-  .then(
-    (blob) =>
-      new Promise((resolve) => {
-        const reader = new FileReader();
+    .then((response) => response.blob())
+    .then(
+      (blob) =>
+        new Promise((resolve) => {
+          const reader = new FileReader();
 
-        reader.onloadend = () => resolve(reader.result);
+          reader.onloadend = () => resolve(reader.result);
 
-        reader.readAsDataURL(blob);
-      })
-  );
+          reader.readAsDataURL(blob);
+        })
+    );
 
   const nomeCompleto =
     `${allievo.nome || ""} ${allievo.cognome || ""}`.trim();
@@ -276,132 +286,1063 @@ const stopAllievi = onSnapshot(
       ).toLocaleDateString("it-IT")
     : "-";
 
-  const importo = Number(versamento.importo || 0).toFixed(2);
+  const importo = Number(
+    versamento.importo || 0
+  ).toFixed(2);
+
   const totaleVersatoFinoAQui = (allievo.versamenti || [])
-  .slice(0, index + 1)
-  .reduce(
-    (totale, v) => totale + Number(v.importo || 0),
+    .slice(0, index + 1)
+    .reduce(
+      (totale, v) =>
+        totale + Number(v.importo || 0),
+      0
+    );
+
+  const saldoMancante = Math.max(
+    0,
+    Number(allievo.costoCorso || 0) -
+      totaleVersatoFinoAQui
+  ).toFixed(2);
+
+  // LOGO
+  pdf.addImage(
+    logo,
+    "JPEG",
+    20,
+    15,
+    30,
+    30
+  );
+
+  // NOME SCUOLA
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+
+  pdf.text(
+    "SCUOLA NAUTICA ZENITH",
+    35,
+    54,
+    {
+      align: "center",
+    }
+  );
+
+  // DATA PAGAMENTO
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(11);
+
+  pdf.text(
+    `Data pagamento: ${dataPagamento}`,
+    190,
+    25,
+    {
+      align: "right",
+    }
+  );
+
+  // TITOLO
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(16);
+
+  pdf.text(
+    "RICEVUTA DI PAGAMENTO",
+    105,
+    75,
+    {
+      align: "center",
+    }
+  );
+
+  // LINEA
+  pdf.line(20, 82, 190, 82);
+
+  // ALLIEVO
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(11);
+
+  pdf.text(
+    "Ricevuto da:",
+    20,
+    95
+  );
+
+  pdf.setFont("helvetica", "bold");
+
+  pdf.text(
+    nomeCompleto || "-",
+    50,
+    95
+  );
+
+  pdf.setFont("helvetica", "normal");
+
+  if (allievo.codiceFiscale) {
+    pdf.text(
+      `Codice fiscale: ${allievo.codiceFiscale}`,
+      20,
+      110
+    );
+  }
+
+  // IMPORTO
+  pdf.text(
+    "Importo versato:",
+    20,
+    135
+  );
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(14);
+
+  pdf.text(
+    `EUR ${importo}`,
+    60,
+    135
+  );
+
+  // METODO
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(11);
+
+  pdf.text(
+    `Metodo di pagamento: ${versamento.metodo || "-"}`,
+    20,
+    150
+  );
+
+  // RESIDUO
+  pdf.setFont("helvetica", "bold");
+
+  pdf.text(
+    `Importo residuo: EUR ${saldoMancante}`,
+    20,
+    175
+  );
+
+  // CAUSALE
+  pdf.setFont("helvetica", "normal");
+
+  pdf.text(
+    "Pagamento relativo al corso per il conseguimento della patente nautica.",
+    20,
+    195
+  );
+
+  // FOOTER
+  pdf.line(20, 215, 190, 215);
+
+  pdf.setFontSize(9);
+
+  pdf.text(
+    "Documento generato dal Gestionale Scuola Nautica Zenith",
+    105,
+    228,
+    {
+      align: "center",
+    }
+  );
+
+  // STAMPA DIRETTA
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const finestraStampa = window.open(pdfUrl);
+
+  if (finestraStampa) {
+    finestraStampa.onload = () => {
+      finestraStampa.print();
+    };
+  }
+}
+// QUI devono esserci le funzioni vere
+// generaRicevutaVersamento
+// generaPdfDaIncassare
+function generaPdfDaIncassare() {
+  const pdf = new jsPDF();
+
+  const euro = (valore) =>
+    `EUR ${Number(valore || 0).toFixed(2)}`;
+
+  const allieviDaSaldare = allievi.filter((allievo) => {
+    const totaleVersato = (allievo.versamenti || []).reduce(
+      (somma, versamento) =>
+        somma + Number(versamento.importo || 0),
+      0
+    );
+
+    const residuo =
+      Number(allievo.costoCorso || 0) - totaleVersato;
+
+    return residuo > 0;
+  });
+
+  // TITOLO
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+
+  pdf.text(
+    "SITUAZIONE ALLIEVI DA SALDARE",
+    105,
+    18,
+    { align: "center" }
+  );
+
+  // DATA
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    `Data: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    28,
+    { align: "right" }
+  );
+
+  pdf.line(15, 33, 195, 33);
+
+  // COLONNE
+  const xSinistra = 15;
+  const xDestra = 108;
+  const larghezzaColonna = 87;
+
+  let ySinistra = 45;
+  let yDestra = 45;
+
+  // linea centrale
+  pdf.line(103, 38, 103, 280);
+
+  allieviDaSaldare.forEach((allievo, indice) => {
+    const versamenti = allievo.versamenti || [];
+
+    const totaleVersato = versamenti.reduce(
+      (somma, versamento) =>
+        somma + Number(versamento.importo || 0),
+      0
+    );
+
+    const residuo = Math.max(
+      0,
+      Number(allievo.costoCorso || 0) - totaleVersato
+    );
+
+    const usaSinistra = indice % 2 === 0;
+
+    const x = usaSinistra ? xSinistra : xDestra;
+    let y = usaSinistra ? ySinistra : yDestra;
+
+    // se siamo troppo in basso, nuova pagina
+    if (y > 245) {
+      pdf.addPage();
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(17);
+
+      pdf.text(
+        "SITUAZIONE ALLIEVI DA SALDARE",
+        105,
+        18,
+        { align: "center" }
+      );
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+
+      pdf.text(
+        `Data: ${new Date().toLocaleDateString("it-IT")}`,
+        190,
+        28,
+        { align: "right" }
+      );
+
+      pdf.line(15, 33, 195, 33);
+      pdf.line(103, 38, 103, 280);
+ySinistra = 45;
+yDestra = 45;
+
+y = 45;
+}
+ 
+    // NOME
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+
+    pdf.text(
+      `${indice + 1}. ${allievo.nome || ""} ${allievo.cognome || ""}`,
+      x,
+      y
+    );
+
+    y += 8;
+
+    // COSTO CORSO
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+
+    pdf.text(
+      `Costo corso: ${euro(allievo.costoCorso)}`,
+      x + 5,
+      y
+    );
+
+    y += 7;
+
+    // MOVIMENTI
+    pdf.setFont("helvetica", "bold");
+
+    pdf.text(
+      "Movimenti:",
+      x + 5,
+      y
+    );
+
+    y += 6;
+
+    pdf.setFont("helvetica", "normal");
+
+    if (versamenti.length > 0) {
+      versamenti.forEach((versamento) => {
+        const data = versamento.data
+          ? new Date(
+              versamento.data + "T00:00:00"
+            ).toLocaleDateString("it-IT")
+          : "-";
+
+        pdf.text(
+          `${data}   ${euro(versamento.importo)}   ${versamento.metodo || "-"}`,
+          x + 10,
+          y
+        );
+
+        y += 6;
+      });
+    } else {
+      pdf.text(
+        "Nessun versamento registrato",
+        x + 10,
+        y
+      );
+
+      y += 6;
+    }
+
+    // TOTALI
+    pdf.setFont("helvetica", "bold");
+
+    pdf.text(
+      `Totale versato: ${euro(totaleVersato)}`,
+      x + 5,
+      y
+    );
+
+    y += 6;
+
+    pdf.setTextColor(220, 38, 38);
+
+pdf.text(
+  `Importo residuo: ${euro(residuo)}`,
+  x + 5,
+  y
+);
+
+pdf.setTextColor(0, 0, 0);
+
+    y += 9;
+
+    // linea sotto allievo
+    pdf.line(
+      x,
+      y,
+      x + larghezzaColonna,
+      y
+    );
+
+    y += 10;
+
+    if (usaSinistra) {
+      ySinistra = y;
+    } else {
+      yDestra = y;
+    }
+  });
+
+  if (allieviDaSaldare.length === 0) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(12);
+
+    pdf.text(
+      "Nessun allievo con importi da saldare.",
+      105,
+      60,
+      { align: "center" }
+    );
+  }
+
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const finestraStampa = window.open(pdfUrl);
+
+  if (finestraStampa) {
+    finestraStampa.onload = () => {
+      finestraStampa.print();
+    };
+  }
+}
+
+function generaEstrattoContoAllievo(allievo) {
+  const pdf = new jsPDF();
+
+  const euro = (valore) =>
+    `EUR ${Number(valore || 0).toFixed(2)}`;
+
+  const nomeCompleto =
+    `${allievo.nome || ""} ${allievo.cognome || ""}`.trim();
+
+  const versamenti = allievo.versamenti || [];
+
+  const totaleVersato = versamenti.reduce(
+    (somma, versamento) =>
+      somma + Number(versamento.importo || 0),
     0
   );
 
-const saldoMancante = Math.max(
-  0,
-  Number(allievo.costoCorso || 0) - totaleVersatoFinoAQui
-).toFixed(2);
-
-  pdf.addImage(
-  logo,
-  "JPEG",
-  20,
-  15,
-  30,
-  30
-);
-
-pdf.setFont("helvetica", "bold");
-pdf.setFontSize(12);
-
-pdf.text(
-  "SCUOLA NAUTICA ZENITH",
-  35,
-  54,
-  {
-    align: "center",
-  }
-);
-
-pdf.setFont("helvetica", "bold");
-pdf.setFontSize(16);
-
-pdf.text("RICEVUTA DI PAGAMENTO", 105, 75, {
-  align: "center",
-});
-
-pdf.setFont("helvetica", "normal");
-pdf.setFontSize(11);
-
-pdf.text(
-  `Data pagamento: ${dataPagamento}`,
-  190,
-  25,
-  {
-    align: "right",
-  }
-);
-
-pdf.line(20, 82, 190, 82);
-
-pdf.text("Ricevuto da:", 20, 95);
-
-pdf.setFont("helvetica", "bold");
-pdf.text(nomeCompleto || "-", 50, 95);
-
-pdf.setFont("helvetica", "normal");
-
-if (allievo.codiceFiscale) {
-  pdf.text(
-    `Codice fiscale: ${allievo.codiceFiscale}`,
-    20,
-    110
+  const residuo = Math.max(
+    0,
+    Number(allievo.costoCorso || 0) - totaleVersato
   );
-}
 
-pdf.text("Importo versato:", 20, 135);
+  // TITOLO
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
 
-pdf.setFont("helvetica", "bold");
-pdf.setFontSize(14);
-pdf.text(`EUR ${importo}`, 60, 135);
+  pdf.text(
+    "ESTRATTO CONTO ALLIEVO",
+    105,
+    20,
+    { align: "center" }
+  );
 
-pdf.setFont("helvetica", "normal");
-pdf.setFontSize(11);
+  // DATA
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
 
-pdf.text(
-  `Metodo di pagamento: ${versamento.metodo || "-"}`,
-  20,
-  150
-);
+  pdf.text(
+    `Data: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    30,
+    { align: "right" }
+  );
 
-pdf.setFont("helvetica", "bold");
+  pdf.line(20, 35, 190, 35);
 
-pdf.text(
-  `Importo residuo: EUR ${saldoMancante}`,
-  20,
-  175
-);
+  // DATI ALLIEVO
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(13);
 
-pdf.setFont("helvetica", "normal");
+  pdf.text(
+    nomeCompleto || "-",
+    20,
+    50
+  );
 
-pdf.text(
-  "Pagamento relativo al corso per il conseguimento della patente nautica.",
-  20,
-  195
-);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
 
-pdf.line(20, 215, 190, 215);
-
-pdf.setFontSize(9);
-
-pdf.text(
-  "Documento generato dal Gestionale Scuola Nautica Zenith",
-  105,
-  228,
-  {
-    align: "center",
+  if (allievo.codiceFiscale) {
+    pdf.text(
+      `Codice fiscale: ${allievo.codiceFiscale}`,
+      20,
+      60
+    );
   }
-);
+  
 
-  const nomeFile =
-    `Ricevuta_${nomeCompleto.replace(/\s+/g, "_")}_${dataPagamento.replace(
-      /\//g,
-      "-"
-    )}.pdf`;
+  pdf.text(
+    `Costo corso: ${euro(allievo.costoCorso)}`,
+    20,
+    75
+  );
 
-  pdf.save(nomeFile);
+  // MOVIMENTI
+  let y = 92;
+
+  pdf.setFont("helvetica", "bold");
+
+  pdf.text(
+    "MOVIMENTI",
+    20,
+    y
+  );
+
+  y += 10;
+
+  pdf.setFont("helvetica", "normal");
+
+  if (versamenti.length === 0) {
+    pdf.text(
+      "Nessun versamento registrato",
+      20,
+      y
+    );
+
+    y += 10;
+  } else {
+    versamenti.forEach((versamento, index) => {
+      const data = versamento.data
+        ? new Date(
+            versamento.data + "T00:00:00"
+          ).toLocaleDateString("it-IT")
+        : "-";
+
+      pdf.text(
+        `${index + 1}. ${data}   ${euro(
+          versamento.importo
+        )}   ${versamento.metodo || "-"}`,
+        20,
+        y
+      );
+
+      y += 8;
+    });
+  }
+
+  y += 5;
+
+  pdf.line(20, y, 190, y);
+
+  y += 12;
+
+  // TOTALI
+  pdf.setFont("helvetica", "bold");
+
+  pdf.text(
+    `Totale versato: ${euro(totaleVersato)}`,
+    20,
+    y
+  );
+
+  y += 10;
+
+  if (residuo > 0) {
+    pdf.setTextColor(220, 38, 38);
+  }
+
+  pdf.text(
+    `Importo residuo: ${euro(residuo)}`,
+    20,
+    y
+  );
+
+  pdf.setTextColor(0, 0, 0);
+
+  y += 20;
+
+  pdf.line(20, y, 190, y);
+
+  y += 10;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    "Documento generato dal Gestionale Scuola Nautica Zenith",
+    105,
+    y,
+    { align: "center" }
+  );
+
+  // APERTURA PDF
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  window.open(pdfUrl, "_blank");
 }
-  async function salvaAllievo(e) {
+
+function generaPdfDocumentiMancanti() {
+  const pdf = new jsPDF();
+
+  const etichetteDocumenti = {
+    documentoIdentita: "Documento di identita",
+    codiceFiscale: "Codice fiscale / Tessera sanitaria",
+    certificatoMedico: "Certificato medico",
+    fototessere: "Fototessere",
+    bollettini: "Ricevute / Bollettini",
+    privacy: "Modulo privacy",
+    autocertificazione: "Autocertificazione",
+  };
+
+  const allieviConDocumentiMancanti = allievi
+    .map((allievo) => {
+      const documenti = allievo.documenti || {};
+
+      const mancanti = Object.keys(etichetteDocumenti).filter(
+        (chiave) => !documenti[chiave]
+      );
+
+      return {
+        ...allievo,
+        documentiMancanti: mancanti,
+      };
+    })
+    .filter((allievo) => allievo.documentiMancanti.length > 0);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+
+  pdf.text(
+    "DOCUMENTI MANCANTI ALLIEVI",
+    105,
+    20,
+    { align: "center" }
+  );
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    `Data: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    30,
+    { align: "right" }
+  );
+
+  pdf.line(20, 35, 190, 35);
+
+  let y = 48;
+
+  allieviConDocumentiMancanti.forEach((allievo, index) => {
+    if (y > 245) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+
+    pdf.text(
+      `${index + 1}. ${allievo.nome || ""} ${allievo.cognome || ""}`,
+      20,
+      y
+    );
+
+    y += 7;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+
+    allievo.documentiMancanti.forEach((chiave) => {
+      pdf.text(
+        `- ${etichetteDocumenti[chiave]}`,
+        28,
+        y
+      );
+
+      y += 6;
+    });
+
+    y += 4;
+
+    pdf.line(20, y, 190, y);
+
+    y += 9;
+  });
+
+  if (allieviConDocumentiMancanti.length === 0) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(12);
+
+    pdf.text(
+      "Tutti gli allievi hanno consegnato i documenti richiesti.",
+      105,
+      60,
+      { align: "center" }
+    );
+  }
+
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const finestraStampa = window.open(pdfUrl);
+
+  if (finestraStampa) {
+    finestraStampa.onload = () => {
+      finestraStampa.print();
+    };
+  }
+}
+function generaPdfIncassiBonifico() {
+  const pdf = new jsPDF();
+
+  const movimentiBonifico = allievi.flatMap((allievo) =>
+    (allievo.versamenti || [])
+      .filter((versamento) => versamento.metodo === "Bonifico")
+      .map((versamento) => ({
+        nome: `${allievo.nome || ""} ${allievo.cognome || ""}`.trim(),
+        data: versamento.data || "",
+        importo: Number(versamento.importo || 0),
+      }))
+  );
+
+  const totaleBonifico = movimentiBonifico.reduce(
+    (totale, movimento) => totale + movimento.importo,
+    0
+  );
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+
+  pdf.text(
+    "INCASSI BONIFICO",
+    105,
+    20,
+    { align: "center" }
+  );
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    `Data stampa: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    30,
+    { align: "right" }
+  );
+
+  pdf.line(20, 35, 190, 35);
+
+  let y = 48;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+
+  pdf.text("Allievo", 20, y);
+  pdf.text("Data", 115, y);
+  pdf.text("Importo", 190, y, { align: "right" });
+
+  y += 5;
+
+  pdf.line(20, y, 190, y);
+
+  y += 8;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+
+  movimentiBonifico.forEach((movimento) => {
+    if (y > 260) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    const data = movimento.data
+      ? new Date(
+          movimento.data + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "-";
+
+    pdf.text(
+      movimento.nome || "-",
+      20,
+      y
+    );
+
+    pdf.text(
+      data,
+      115,
+      y
+    );
+
+    pdf.text(
+      `EUR ${movimento.importo.toFixed(2)}`,
+      190,
+      y,
+      { align: "right" }
+    );
+
+    y += 8;
+  });
+
+  if (movimentiBonifico.length === 0) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(11);
+
+    pdf.text(
+      "Nessun incasso tramite bonifico registrato.",
+      105,
+      65,
+      { align: "center" }
+    );
+
+    y = 80;
+  }
+
+  y += 3;
+
+  pdf.line(20, y, 190, y);
+
+  y += 10;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+
+  pdf.text(
+    `TOTALE BONIFICI: EUR ${totaleBonifico.toFixed(2)}`,
+    190,
+    y,
+    { align: "right" }
+  );
+
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const finestraStampa = window.open(pdfUrl);
+
+  if (finestraStampa) {
+  finestraStampa.onload = () => {
+    finestraStampa.print();
+  };
+}
+}
+
+function generaPdfIncassiPos() {
+  const pdf = new jsPDF();
+
+  const movimentiPos = allievi.flatMap((allievo) =>
+    (allievo.versamenti || [])
+      .filter((versamento) => versamento.metodo === "POS")
+      .map((versamento) => ({
+        nome: `${allievo.nome || ""} ${allievo.cognome || ""}`.trim(),
+        data: versamento.data || "",
+        importo: Number(versamento.importo || 0),
+      }))
+  );
+
+  const totalePos = movimentiPos.reduce(
+    (totale, movimento) => totale + movimento.importo,
+    0
+  );
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+
+  pdf.text("INCASSI POS", 105, 20, { align: "center" });
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    `Data stampa: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    30,
+    { align: "right" }
+  );
+
+  pdf.line(20, 35, 190, 35);
+
+  let y = 48;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+
+  pdf.text("Allievo", 20, y);
+  pdf.text("Data", 115, y);
+  pdf.text("Importo", 190, y, { align: "right" });
+
+  y += 5;
+  pdf.line(20, y, 190, y);
+  y += 8;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+
+  movimentiPos.forEach((movimento) => {
+    if (y > 260) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    const data = movimento.data
+      ? new Date(
+          movimento.data + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "-";
+
+    pdf.text(movimento.nome || "-", 20, y);
+    pdf.text(data, 115, y);
+
+    pdf.text(
+      `EUR ${movimento.importo.toFixed(2)}`,
+      190,
+      y,
+      { align: "right" }
+    );
+
+    y += 8;
+  });
+
+  if (movimentiPos.length === 0) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(11);
+
+    pdf.text(
+      "Nessun incasso tramite POS registrato.",
+      105,
+      65,
+      { align: "center" }
+    );
+
+    y = 80;
+  }
+
+  y += 3;
+  pdf.line(20, y, 190, y);
+  y += 10;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+
+  pdf.text(
+    `TOTALE POS: EUR ${totalePos.toFixed(2)}`,
+    190,
+    y,
+    { align: "right" }
+  );
+
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const finestraStampa = window.open(pdfUrl);
+
+  if (finestraStampa) {
+    finestraStampa.onload = () => {
+      finestraStampa.print();
+    };
+  }
+}
+function generaPdfIncassiContanti() {
+  const pdf = new jsPDF();
+
+  const movimentiContanti = allievi.flatMap((allievo) =>
+    (allievo.versamenti || [])
+      .filter((versamento) => versamento.metodo === "Contanti")
+      .map((versamento) => ({
+        nome: `${allievo.nome || ""} ${allievo.cognome || ""}`.trim(),
+        data: versamento.data || "",
+        importo: Number(versamento.importo || 0),
+      }))
+  );
+
+  const totaleContanti = movimentiContanti.reduce(
+    (totale, movimento) => totale + movimento.importo,
+    0
+  );
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+
+  pdf.text("INCASSI CONTANTI", 105, 20, {
+    align: "center",
+  });
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    `Data stampa: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    30,
+    { align: "right" }
+  );
+
+  pdf.line(20, 35, 190, 35);
+
+  let y = 48;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+
+  pdf.text("Allievo", 20, y);
+  pdf.text("Data", 115, y);
+  pdf.text("Importo", 190, y, { align: "right" });
+
+  y += 5;
+  pdf.line(20, y, 190, y);
+  y += 8;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+
+  movimentiContanti.forEach((movimento) => {
+    if (y > 260) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    const data = movimento.data
+      ? new Date(
+          movimento.data + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "-";
+
+    pdf.text(movimento.nome || "-", 20, y);
+    pdf.text(data, 115, y);
+
+    pdf.text(
+      `EUR ${movimento.importo.toFixed(2)}`,
+      190,
+      y,
+      { align: "right" }
+    );
+
+    y += 8;
+  });
+
+  if (movimentiContanti.length === 0) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(11);
+
+    pdf.text(
+      "Nessun incasso in contanti registrato.",
+      105,
+      65,
+      { align: "center" }
+    );
+
+    y = 80;
+  }
+
+  y += 3;
+  pdf.line(20, y, 190, y);
+  y += 10;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+
+  pdf.text(
+    `TOTALE CONTANTI: EUR ${totaleContanti.toFixed(2)}`,
+    190,
+    y,
+    { align: "right" }
+  );
+
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const finestraStampa = window.open(pdfUrl);
+
+  if (finestraStampa) {
+    finestraStampa.onload = () => {
+      finestraStampa.print();
+    };
+  }
+}
+async function salvaAllievo(e) {
   e.preventDefault();
 
-  if (!formAllievo.nome.trim() || !formAllievo.cognome.trim()) {
+  if (
+    !formAllievo.nome.trim() ||
+    !formAllievo.cognome.trim()
+  ) {
     alert("Inserisci almeno nome e cognome");
     return;
   }
@@ -413,12 +1354,16 @@ pdf.text(
     );
 
     alert("Allievo aggiornato");
+
     setAllievoInModifica(null);
   } else {
-    await addDoc(collection(db, "allievi"), {
-      ...formAllievo,
-      creatoIl: new Date().toISOString(),
-    });
+    await addDoc(
+      collection(db, "allievi"),
+      {
+        ...formAllievo,
+        creatoIl: new Date().toISOString(),
+      }
+    );
 
     alert("Allievo salvato");
   }
@@ -437,9 +1382,17 @@ pdf.text(
     codiceFiscale: "",
     cellulare: "",
     email: "",
+    documenti: {
+  documentoIdentita: false,
+  codiceFiscale: false,
+  certificatoMedico: false,
+  fototessere: false,
+  bollettini: false,
+  privacy: false,
+  autocertificazione: false,
+},
     costoCorso: "",
-versamenti: [],
-    
+    versamenti: [],
   });
 
   setMostraFormAllievo(false);
@@ -1734,6 +2687,18 @@ if (ordinaClientiPerSaldo) {
 )}
 {sezione === "scuola" && (
   <>
+  <div
+  style={{
+    margin: "10px 10px 6px",
+    fontSize: "11px",
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.65)",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  }}
+>
+  GESTIONE SCUOLA
+</div>
     <button
       className={vista === "allievi" ? "active" : ""}
       onClick={() => setVista("allievi")}
@@ -1741,27 +2706,99 @@ if (ordinaClientiPerSaldo) {
       Allievi
     </button>
 
+    
     <button
-      className={vista === "incassiScuola" ? "active" : ""}
-      onClick={() => setVista("incassiScuola")}
-    >
-            Incassi
-    </button>
+  type="button"
+  onClick={generaPdfDocumentiMancanti}
+>
+  Documenti mancanti
+</button>
 
-    <div
-      style={{
-        height: "1px",
-        background: "rgba(255, 255, 255, 0.18)",
-        margin: "8px 6px",
-      }}
-    />
+   <hr
+  style={{
+    width: "calc(100% - 16px)",
+    margin: "12px 8px",
+    border: "none",
+    borderTop: "1px solid rgba(255,255,255,0.55)",
+  }}
+/>
+
+<div
+  style={{
+    height: "1px",
+    background: "rgba(255,255,255,.14)",
+    margin: "8px 10px",
+  }}
+/>
+<div
+  style={{
+    margin: "10px 10px 6px",
+    fontSize: "11px",
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.65)",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  }}
+>
+  NUOVI ISCRITTI
+</div>
 <button
   className={vista === "iscrizioni" ? "active" : ""}
   onClick={() => setVista("iscrizioni")}
 >
   Iscrizioni
 </button>
+
+<hr
+  style={{
+    width: "calc(100% - 16px)",
+    margin: "12px 8px",
+    border: "none",
+    borderTop: "1px solid rgba(255,255,255,0.55)",
+  }}
+/>
+
+<div
+  style={{
+    margin: "10px 10px 6px",
+    fontSize: "11px",
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.65)",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  }}
+>
+  CONTABILITA'
+</div>
+
+<button
+  className={vista === "incassiScuola" ? "active" : ""}
+  onClick={() => setVista("incassiScuola")}
+>
+  Da incassare
+</button>
+<button
+  type="button"
+  onClick={generaPdfIncassiBonifico}
+>
+  Incassi Bonifico
+</button>
+
+<button
+  type="button"
+  onClick={generaPdfIncassiPos}
+>
+  Incassi POS
+</button>
+
+<button
+  type="button"
+  onClick={generaPdfIncassiContanti}
+>
+  Incassi Contanti
+</button>
   </>
+)}
 )}
 {sezione === "scuola" && (
   <div
@@ -2271,6 +3308,17 @@ left: "250px",
         gap: "8px",
       }}
     >
+    <button
+  type="button"
+  className="clientBtn"
+  onClick={() => generaEstrattoContoAllievo(allievo)}
+  style={{
+    background: "#2563eb",
+    color: "white",
+  }}
+>
+  Estratto conto
+</button>
       <button
         type="button"
         className="clientBtn editBtn"
@@ -2289,6 +3337,15 @@ dataNascita: allievo.dataNascita || "",
             codiceFiscale: allievo.codiceFiscale || "",
             cellulare: allievo.cellulare || "",
             email: allievo.email || "",
+            documenti: {
+  documentoIdentita: allievo.documenti?.documentoIdentita || false,
+  codiceFiscale: allievo.documenti?.codiceFiscale || false,
+  certificatoMedico: allievo.documenti?.certificatoMedico || false,
+  fototessere: allievo.documenti?.fototessere || false,
+  bollettini: allievo.documenti?.bollettini || false,
+  privacy: allievo.documenti?.privacy || false,
+  autocertificazione: allievo.documenti?.autocertificazione || false,
+},
             costoCorso: allievo.costoCorso || "",
 versamenti: allievo.versamenti || [],
           });
@@ -2894,7 +3951,7 @@ versamenti: allievo.versamenti || [],
         <option value="">Seleziona</option>
         <option value="Contanti">Contanti</option>
         <option value="Bonifico">Bonifico</option>
-        <option value="Carta">Carta</option>
+        <option value="POS">POS</option>
       </select>
     </label>
 
@@ -3072,19 +4129,359 @@ versamenti: allievo.versamenti || [],
 )}
 <div
   style={{
+    marginTop: "24px",
+    marginBottom: "12px",
+    paddingTop: "16px",
+    borderTop: "1px solid #e2e8f0",
+    fontSize: "13px",
+    fontWeight: "800",
+    color: "#2563eb",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  }}
+>
+  Documenti
+</div>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: "12px 16px",
+  }}
+>
+  {[
+    ["documentoIdentita", "Documento di identità"],
+    ["codiceFiscale", "Codice fiscale / Tessera sanitaria"],
+    ["certificatoMedico", "Certificato medico"],
+    ["fototessere", "Fototessere"],
+    ["bollettini", "Ricevute / Bollettini"],
+    ["privacy", "Modulo privacy"],
+    ["autocertificazione", "Autocertificazione"],
+  ].map(([chiave, etichetta]) => (
+    <label
+      key={chiave}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        fontSize: "14px",
+        color: "#334155",
+        cursor: "pointer",
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={formAllievo.documenti?.[chiave] || false}
+        onChange={(e) =>
+          setFormAllievo({
+            ...formAllievo,
+            documenti: {
+              ...(formAllievo.documenti || {}),
+              [chiave]: e.target.checked,
+            },
+          })
+        }
+      />
+
+      {etichetta}
+    </label>
+  ))}
+</div>
+<div
+  style={{
     display: "flex",
     justifyContent: "flex-end",
+    gap: "10px",
     marginTop: "20px",
   }}
 >
+  <button
+    type="button"
+    onClick={() => {
+      setMostraFormAllievo(false);
+      setAllievoInModifica(null);
+
+      setFormAllievo({
+        nome: "",
+        cognome: "",
+        luogoNascita: "",
+        provinciaNascita: "",
+        dataNascita: "",
+        indirizzo: "",
+        civico: "",
+        cap: "",
+        citta: "",
+        provincia: "",
+        codiceFiscale: "",
+        cellulare: "",
+        email: "",
+        costoCorso: "",
+        versamenti: [],
+      });
+    }}
+  >
+    Annulla
+  </button>
+
   <button type="submit" className="primary">
-  {allievoInModifica ? "Salva modifiche" : "Salva allievo"}
-</button>
+    {allievoInModifica ? "Salva modifiche" : "Salva allievo"}
+  </button>
 </div>
 </form>
 )}
 
 </section>
+)}
+{sezione === "scuola" && vista === "incassiScuola" && (
+  <section
+    style={{
+      width: "100%",
+      background: "#ffffff",
+      borderRadius: "14px",
+      padding: "22px",
+      boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "18px",
+      }}
+    >
+            <div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "22px",
+            color: "#0f172a",
+          }}
+        >
+          Incassi
+        </h2>
+
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#64748b",
+          }}
+        >
+         Situazione economica degli allievi
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="primary"
+        onClick={generaPdfDaIncassare}
+      >
+        Stampa situazione PDF
+      </button>
+      
+    </div>
+
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gap: "16px",
+        marginBottom: "20px",
+      }}
+    >
+      <div
+        style={{
+          border: "1px solid #e2e8f0",
+          borderRadius: "12px",
+          padding: "16px",
+          background: "#f8fafc",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "12px",
+            fontWeight: "700",
+            color: "#64748b",
+            textTransform: "uppercase",
+          }}
+        >
+          Totale incassato
+        </div>
+
+        <div
+          style={{
+            marginTop: "6px",
+            fontSize: "24px",
+            fontWeight: "800",
+            color: "#0f172a",
+          }}
+        >
+          €{" "}
+          {allievi
+            .reduce(
+              (totale, allievo) =>
+                totale +
+                (allievo.versamenti || []).reduce(
+                  (somma, versamento) =>
+                    somma + Number(versamento.importo || 0),
+                  0
+                ),
+              0
+            )
+            .toFixed(2)}
+        </div>
+      </div>
+
+      <div
+        style={{
+          border: "1px solid #fecaca",
+          borderRadius: "12px",
+          padding: "16px",
+          background: "#fff7f7",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "12px",
+            fontWeight: "700",
+            color: "#991b1b",
+            textTransform: "uppercase",
+          }}
+        >
+          Totale da incassare
+        </div>
+
+        <div
+          style={{
+            marginTop: "6px",
+            fontSize: "24px",
+            fontWeight: "800",
+            color: "#dc2626",
+          }}
+        >
+          €{" "}
+          {allievi
+            .reduce((totale, allievo) => {
+              const versato = (allievo.versamenti || []).reduce(
+                (somma, versamento) =>
+                  somma + Number(versamento.importo || 0),
+                0
+              );
+
+              return (
+                totale +
+                Math.max(
+                  0,
+                  Number(allievo.costoCorso || 0) - versato
+                )
+              );
+            }, 0)
+            .toFixed(2)}
+        </div>
+      </div>
+    </div>
+
+    <div
+      style={{
+        display: "grid",
+        gap: "10px",
+      }}
+    >
+      <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1.5fr 140px 140px 140px 120px",
+    gap: "16px",
+    alignItems: "center",
+    padding: "0 16px 8px 16px",
+    fontSize: "12px",
+    fontWeight: "800",
+    color: "#64748b",
+    textTransform: "uppercase",
+  }}
+>
+  <div>Allievo</div>
+  <div>Costo corso</div>
+  <div>Versato</div>
+  <div>Da incassare</div>
+  <div>Stato</div>
+</div>
+      {allievi
+  .filter((allievo) => {
+    const totaleVersato = (allievo.versamenti || []).reduce(
+      (somma, versamento) =>
+        somma + Number(versamento.importo || 0),
+      0
+    );
+
+    const residuo = Math.max(
+      0,
+      Number(allievo.costoCorso || 0) - totaleVersato
+    );
+
+    return residuo > 0;
+  })
+  .map((allievo) => {
+        const totaleVersato = (allievo.versamenti || []).reduce(
+          (somma, versamento) =>
+            somma + Number(versamento.importo || 0),
+          0
+        );
+
+        const residuo = Math.max(
+          0,
+          Number(allievo.costoCorso || 0) - totaleVersato
+        );
+
+        return (
+          <div
+            key={allievo.firebaseId}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.5fr 140px 140px 140px 120px",
+              gap: "16px",
+              alignItems: "center",
+              padding: "14px 16px",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+            }}
+          >
+            <div style={{ fontWeight: "700", color: "#0f172a" }}>
+              {allievo.nome} {allievo.cognome}
+            </div>
+
+            <div>
+              € {Number(allievo.costoCorso || 0).toFixed(2)}
+            </div>
+
+            <div>
+              € {totaleVersato.toFixed(2)}
+            </div>
+
+            <div
+              style={{
+                fontWeight: "800",
+                color: residuo > 0 ? "#dc2626" : "#15803d",
+              }}
+            >
+              € {residuo.toFixed(2)}
+            </div>
+
+            <div
+              style={{
+                fontWeight: "700",
+                color: residuo > 0 ? "#dc2626" : "#15803d",
+              }}
+            >
+              {residuo > 0 ? "Da saldare" : "Saldato"}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </section>
 )}
 
           {vista === "lavori" && (
@@ -3628,7 +5025,6 @@ versamenti: allievo.versamenti || [],
     </div>
   </article>
 ))}
-    ))}
 </div>
   </div>
 )}
@@ -4716,7 +6112,6 @@ const saldoTotaleCliente =
     </>
   );
 }
-
 function PreventivoStampabile({ preventivo }) {
   const totale = calcolaTotale(preventivo);
 
