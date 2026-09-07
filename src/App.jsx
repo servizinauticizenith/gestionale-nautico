@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { jsPDF } from "jspdf";
+import PizZip from "pizzip";
+import Docxtemplater from "docxtemplater";
 import {
   collection,
   addDoc,
@@ -8,7 +10,6 @@ import {
   onSnapshot,
   updateDoc,
   runTransaction,
-  getDoc,
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "./firebase";
@@ -74,7 +75,6 @@ export default function App() {
   const [allievi, setAllievi] = useState([]);
   const [caricamento, setCaricamento] = useState(true);
   const [utente, setUtente] = useState(null);
-  const [ruoloUtente, setRuoloUtente] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [erroreLogin, setErroreLogin] = useState("");
@@ -114,6 +114,11 @@ const [formAllievo, setFormAllievo] = useState({
   luogoNascita: "",
   provinciaNascita: "",
   dataNascita: "",
+  stato: "",
+cittadinanza: "",
+tipoDocumento: "",
+numeroDocumento: "",
+rilasciatoDa: "",
   indirizzo: "",
   civico: "",
   cap: "",
@@ -138,6 +143,7 @@ tipoPatente: "",
   privacy: false,
   autocertificazione: false,
 },
+tipoCorso: "",
   costoCorso: "",
 versamenti: [],
 });
@@ -152,20 +158,24 @@ versamenti: [],
 const [filtroAnnoRimessaggi, setFiltroAnnoRimessaggi] = useState(
   new Date().getFullYear().toString()
 );
-  const [filtroPagamentoRimessaggi, setFiltroPagamentoRimessaggi] = useState("Tutti");
-  const [vista, setVista] = useState("dashboard");
-  const [sezione, setSezione] = useState("cantiere");
-  useEffect(() => {
-  if (ruoloUtente === "scuola") {
-    setSezione("scuola");
-  }
-}, [ruoloUtente]);
-  const [preventivoDaStampare, setPreventivoDaStampare] = useState(null);
-  const [rimessaggioDaStampare, setRimessaggioDaStampare] = useState(null);
-  const [lavoroDaStampare, setLavoroDaStampare] = useState(null);
-  const [stampaElencoLavori, setStampaElencoLavori] = useState(false);
-  const [stampaElencoRimessaggi, setStampaElencoRimessaggi] = useState(false);
-  function modificaCliente(cliente) {
+
+const [filtroPagamentoRimessaggi, setFiltroPagamentoRimessaggi] = useState("Tutti");
+
+const [vista, setVista] = useState("dashboard");
+
+const [sezione, setSezione] = useState("cantiere");
+
+const [preventivoDaStampare, setPreventivoDaStampare] = useState(null);
+
+const [rimessaggioDaStampare, setRimessaggioDaStampare] = useState(null);
+
+const [lavoroDaStampare, setLavoroDaStampare] = useState(null);
+
+const [stampaElencoLavori, setStampaElencoLavori] = useState(false);
+
+const [stampaElencoRimessaggi, setStampaElencoRimessaggi] = useState(false);
+
+function modificaCliente(cliente) {
   setFormCliente({
     firebaseId: cliente.firebaseId || "",
     cliente: cliente.cliente || "",
@@ -183,29 +193,8 @@ setMostraFormCliente(true);
 }
 
   useEffect(() => {
-  const stopAuth = onAuthStateChanged(auth, async (user) => {
+  const stopAuth = onAuthStateChanged(auth, (user) => {
     setUtente(user);
-
-    if (user) {
-      try {
-        const ruoloRef = doc(db, "utenti", user.uid);
-        const ruoloSnap = await getDoc(ruoloRef);
-
-        if (ruoloSnap.exists()) {
-          const datiRuolo = ruoloSnap.data();
-
-          setRuoloUtente(datiRuolo.ruolo || null);
-        } else {
-          setRuoloUtente(null);
-        }
-      } catch (error) {
-        console.error("Errore lettura ruolo utente:", error);
-        setRuoloUtente(null);
-      }
-    } else {
-      setRuoloUtente(null);
-    }
-
     setCaricamento(false);
   });
 
@@ -213,7 +202,7 @@ setMostraFormCliente(true);
 }, []);
 
   useEffect(() => {
-  if (!utente || !ruoloUtente) {
+  if (!utente) {
     setLavori([]);
     setPreventivi([]);
     setRimessaggi([]);
@@ -239,7 +228,7 @@ setMostraFormCliente(true);
   let stopPreventivi = null;
   let stopClienti = null;
 
-  if (ruoloUtente === "admin") {
+
     stopLavori = onSnapshot(
       collection(db, "lavori"),
       (snapshot) => {
@@ -297,12 +286,7 @@ setMostraFormCliente(true);
         setClientiDb(dati);
       }
     );
-  } else {
-    setLavori([]);
-    setPreventivi([]);
-    setRimessaggi([]);
-    setClientiDb([]);
-  }
+  
 
   return () => {
     stopAllievi();
@@ -312,8 +296,347 @@ setMostraFormCliente(true);
     if (stopClienti) stopClienti();
     if (stopRimessaggi) stopRimessaggi();
   };
-}, [utente, ruoloUtente]);
+}, [utente]);
 
+  function generaCasellarioPDF() {
+  const pdf = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const oggi = new Date().toLocaleDateString("it-IT");
+
+  const cognome = (formAllievo.cognome || "").toUpperCase();
+  const nome = (formAllievo.nome || "").toUpperCase();
+  const luogoNascita = (formAllievo.luogoNascita || "").toUpperCase();
+  const provinciaNascita = (formAllievo.provinciaNascita || "").toUpperCase();
+  const citta = (formAllievo.citta || "").toUpperCase();
+  const provincia = (formAllievo.provincia || "").toUpperCase();
+  const indirizzo = (formAllievo.indirizzo || "").toUpperCase();
+  const civico = (formAllievo.civico || "").toUpperCase();
+
+  const dataNascita = formAllievo.dataNascita
+    ? new Date(
+        formAllievo.dataNascita + "T00:00:00"
+      ).toLocaleDateString("it-IT")
+    : "";
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+
+  pdf.text(
+    "MINISTERO DELLE INFRASTRUTTURE E DEI TRASPORTI - GUARDIA COSTIERA",
+    105,
+    15,
+    { align: "center" }
+  );
+
+  pdf.setFontSize(12);
+
+  pdf.text(
+    "DICHIARAZIONE SOSTITUTIVA DEL CASELLARIO GIUDIZIALE AI FINI DEL",
+    105,
+    25,
+    { align: "center" }
+  );
+
+  pdf.text(
+    "RILASCIO/RINNOVO DELLA PATENTE NAUTICA",
+    105,
+    31,
+    { align: "center" }
+  );
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    "(Art. 46 e 48 D.P.R. 445 del 28 dicembre 2000)",
+    105,
+    37,
+    { align: "center" }
+  );
+
+  pdf.setFontSize(10);
+
+  pdf.text(
+    `Il / la sottoscritto / a ${cognome} ${nome}`,
+    20,
+    50
+  );
+
+  pdf.text(
+    `nato / a ${luogoNascita} (${provinciaNascita}) il ${dataNascita}`,
+    20,
+    58
+  );
+
+  pdf.text(
+    `residente a ${citta} (${provincia}) in via ${indirizzo} ${civico}`,
+    20,
+    66
+  );
+
+  pdf.text(
+    "consapevole delle sanzioni penali, nel caso di dichiarazioni non veritiere,",
+    20,
+    76
+  );
+
+  pdf.text(
+    "di formazione od uso di atti falsi, richiamate dall'art. 76 del D.P.R. 445 del 28 dicembre 2000.",
+    20,
+    82
+  );
+
+  pdf.setFont("helvetica", "bold");
+  pdf.text("DICHIARA", 105, 94, { align: "center" });
+
+  pdf.setFont("helvetica", "normal");
+
+  const testo = [
+    "Di essere in possesso dei requisiti morali di cui all'art.37 del D.M. 29 Luglio 2008, n. 146, ed in particolare:",
+  "[ ] A) di non essere dichiarato delinquente abituale, professionale o per tendenza;",
+  "[ ] Di non esser stato condannato ad una pena detentiva non inferiore a 3 (tre) anni;",
+  "[ ] Di non aver riportato condanne per uno dei delitti previsti dalla legge 22 dicembre 1975, n. 685 e successive modificazioni;",
+  "[ ] B) di aver riportato condanne di cui alla precedente lettera A), ma di aver beneficiato della riabilitazione;",
+  "[ ] C) di non essere stato sottoposto a misure di sicurezza personali o alle misure di prevenzione previste dal Decreto Legislativo 6 settembre 2011, n. 159.",
+  "(Barrare la / e caselle che interessano)",
+];
+
+  let y = 104;
+
+  testo.forEach((riga) => {
+    const righe = pdf.splitTextToSize(riga, 170);
+    pdf.text(righe, 20, y);
+    y += righe.length * 5 + 2;
+  });
+
+  const privacy =
+    "Dichiaro, infine di essere informato, ai sensi e per gli effetti del D.Lvo 30.06.2003 nr.196 (codice in materia di protezione dei dati personali) che i dati personali raccolti saranno trattati anche con strumenti informatici, esclusivamente nell'ambito del procedimento per il quale la presente dichiarazione viene resa.";
+
+  const righePrivacy = pdf.splitTextToSize(privacy, 170);
+
+  pdf.text(righePrivacy, 20, y + 4);
+
+  y += righePrivacy.length * 5 + 12;
+
+  pdf.text(`${citta}, ${oggi}`, 20, y);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.text("IL DICHIARANTE", 150, y + 8);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.line(135, y + 18, 190, y + 18);
+
+  pdf.output("dataurlnewwindow");
+}
+async function generaCasellario() {
+  try {
+    const response = await fetch("/modelli/casellario.docx");
+    console.log("STATUS:", response.status);
+console.log("CONTENT-TYPE:", response.headers.get("content-type"));
+
+    if (!response.ok) {
+      throw new Error("Modello casellario non trovato");
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+
+    const zip = new PizZip(arrayBuffer);
+
+    const docx = new Docxtemplater(zip, {
+  paragraphLoop: true,
+  linebreaks: true,
+  delimiters: {
+    start: "{{",
+    end: "}}",
+  },
+});
+
+    const oggi = new Date();
+
+    const dataOdierna = oggi.toLocaleDateString("it-IT");
+
+    docx.render({
+      COGNOME: (formAllievo.cognome || "").toUpperCase(),
+      NOME: (formAllievo.nome || "").toUpperCase(),
+      LUOGO_NASCITA: (formAllievo.luogoNascita || "").toUpperCase(),
+      PROVINCIA_NASCITA: (formAllievo.provinciaNascita || "").toUpperCase(),
+      DATA_NASCITA: formAllievo.dataNascita
+  ? new Date(formAllievo.dataNascita + "T00:00:00").toLocaleDateString("it-IT")
+  : "",
+      CITTA: (formAllievo.citta || "").toUpperCase(),
+      PROVINCIA: (formAllievo.provincia || "").toUpperCase(),
+      INDIRIZZO: (formAllievo.indirizzo || "").toUpperCase(),
+      CIVICO: (formAllievo.civico || "").toUpperCase(),
+      DATA_ODIERNA: dataOdierna,
+    });
+
+    const blob = docx.getZip().generate({
+      type: "blob",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `Casellario_${formAllievo.cognome || "Allievo"}_${
+      formAllievo.nome || ""
+    }.docx`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Errore generazione casellario:", error);
+    alert("Errore durante la generazione del casellario.");
+  }
+}
+async function generaDisponibilitaEsame() {
+  try {
+    const response = await fetch("/modelli/disponibilita-esame.docx");
+
+    if (!response.ok) {
+      throw new Error("Modello disponibilità esame non trovato");
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+
+    const zip = new PizZip(arrayBuffer);
+
+    const docx = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+      delimiters: {
+        start: "{{",
+        end: "}}",
+      },
+    });
+
+    const oggi = new Date().toLocaleDateString("it-IT");
+
+    const dataNascita = formAllievo.dataNascita
+      ? new Date(
+          formAllievo.dataNascita + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "";
+
+    docx.render({
+      COGNOME: (formAllievo.cognome || "").toUpperCase(),
+      NOME: (formAllievo.nome || "").toUpperCase(),
+      LUOGO_NASCITA: (formAllievo.luogoNascita || "").toUpperCase(),
+      PROVINCIA_NASCITA: (formAllievo.provinciaNascita || "").toUpperCase(),
+      DATA_NASCITA: dataNascita,
+      CITTA: (formAllievo.citta || "").toUpperCase(),
+      PROVINCIA: (formAllievo.provincia || "").toUpperCase(),
+      INDIRIZZO: (formAllievo.indirizzo || "").toUpperCase(),
+      CIVICO: (formAllievo.civico || "").toUpperCase(),
+      DATA_ODIERNA: oggi,
+    });
+
+    const blob = docx.getZip().generate({
+      type: "blob",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `Disponibilita_Esame_${
+      formAllievo.cognome || "Allievo"
+    }_${formAllievo.nome || ""}.docx`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Errore generazione disponibilità esame:", error);
+    alert("Errore durante la generazione della disponibilità esame.");
+  }
+}
+async function generaCertificatoMedico() {
+  try {
+    const response = await fetch("/modelli/certificato-medico.docx");
+
+    if (!response.ok) {
+      throw new Error("Modello certificato medico non trovato");
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+
+    const zip = new PizZip(arrayBuffer);
+
+    const docx = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+      delimiters: {
+        start: "{{",
+        end: "}}",
+      },
+    });
+
+    const oggi = new Date().toLocaleDateString("it-IT");
+
+    const dataNascita = formAllievo.dataNascita
+      ? new Date(
+          formAllievo.dataNascita + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "";
+
+    docx.render({
+      COGNOME: (formAllievo.cognome || "").toUpperCase(),
+      NOME: (formAllievo.nome || "").toUpperCase(),
+      LUOGO_NASCITA: (formAllievo.luogoNascita || "").toUpperCase(),
+      PROVINCIA_NASCITA: (formAllievo.provinciaNascita || "").toUpperCase(),
+      DATA_NASCITA: dataNascita,
+      STATO: (formAllievo.stato || "").toUpperCase(),
+      CITTADINANZA: (formAllievo.cittadinanza || "").toUpperCase(),
+      CODICE_FISCALE: (formAllievo.codiceFiscale || "").toUpperCase(),
+      CITTA: (formAllievo.citta || "").toUpperCase(),
+      PROVINCIA: (formAllievo.provincia || "").toUpperCase(),
+      TIPO_DOCUMENTO: (formAllievo.tipoDocumento || "").toUpperCase(),
+      NUMERO_DOCUMENTO: (formAllievo.numeroDocumento || "").toUpperCase(),
+      RILASCIATO_DA: (formAllievo.rilasciatoDa || "").toUpperCase(),
+      DATA_ODIERNA: oggi,
+    });
+
+    const blob = docx.getZip().generate({
+      type: "blob",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `Certificato_Medico_${
+      formAllievo.cognome || "Allievo"
+    }_${formAllievo.nome || ""}.docx`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Errore generazione certificato medico:", error);
+    alert("Errore durante la generazione del certificato medico.");
+  }
+}
   async function accedi(e) {
     e.preventDefault();
     setErroreLogin("");
@@ -1701,6 +2024,11 @@ async function salvaAllievo(e) {
     luogoNascita: "",
     provinciaNascita: "",
     dataNascita: "",
+      stato: "",
+  cittadinanza: "",
+  tipoDocumento: "",
+  numeroDocumento: "",
+  rilasciatoDa: "",
     indirizzo: "",
     civico: "",
     cap: "",
@@ -2931,18 +3259,16 @@ if (ordinaClientiPerSaldo) {
   <div className="sidebarTitle">SEA SRLS</div>
 
   <div className="sidebarSectionSwitch">
-    {ruoloUtente === "admin" && (
-  <button
-    type="button"
-    className={sezione === "cantiere" ? "activeSection" : ""}
-    onClick={() => {
-      setSezione("cantiere");
-      setVista("dashboard");
-    }}
-  >
-    Cantiere
-  </button>
-)}
+    <button
+  type="button"
+  className={sezione === "cantiere" ? "activeSection" : ""}
+  onClick={() => {
+    setSezione("cantiere");
+    setVista("dashboard");
+  }}
+>
+  Cantiere
+</button>
 
     <button
       type="button"
@@ -3658,6 +3984,11 @@ left: "250px",
             luogoNascita: allievo.luogoNascita || "",
 provinciaNascita: allievo.provinciaNascita || "",
 dataNascita: allievo.dataNascita || "",
+stato: allievo.stato || "",
+cittadinanza: allievo.cittadinanza || "",
+tipoDocumento: allievo.tipoDocumento || "",
+numeroDocumento: allievo.numeroDocumento || "",
+rilasciatoDa: allievo.rilasciatoDa || "",
             indirizzo: allievo.indirizzo || "",
             civico: allievo.civico || "",
             cap: allievo.cap || "",
@@ -4178,6 +4509,140 @@ versamenti: allievo.versamenti || [],
 </div>
 <div
   style={{
+    display: "grid",
+    gridTemplateColumns: "160px 180px 200px 180px 1fr",
+    gap: "16px",
+    width: "100%",
+    marginTop: "16px",
+  }}
+>
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Stato
+    </span>
+
+    <input
+      type="text"
+      value={formAllievo.stato || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          stato: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Cittadinanza
+    </span>
+
+    <input
+      type="text"
+      value={formAllievo.cittadinanza || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          cittadinanza: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Tipo documento
+    </span>
+
+    <input
+      type="text"
+      value={formAllievo.tipoDocumento || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          tipoDocumento: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      N° documento
+    </span>
+
+    <input
+      type="text"
+      value={formAllievo.numeroDocumento || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          numeroDocumento: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Rilasciato da
+    </span>
+
+    <input
+      type="text"
+      value={formAllievo.rilasciatoDa || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          rilasciatoDa: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+</div>
+<div
+  style={{
     marginTop: "24px",
     marginBottom: "12px",
     paddingTop: "16px",
@@ -4451,10 +4916,62 @@ versamenti: allievo.versamenti || [],
 <div
   style={{
     display: "grid",
-    gridTemplateColumns: "180px",
+    gridTemplateColumns: "260px 180px",
     gap: "16px",
+    alignItems: "end",
   }}
 >
+  <label
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+    }}
+  >
+    <span
+      style={{
+        fontSize: "13px",
+        fontWeight: "700",
+        color: "#334155",
+      }}
+    >
+      Tipo corso
+    </span>
+
+    <select
+      value={formAllievo.tipoCorso || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          tipoCorso: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    >
+      <option value="">Seleziona corso</option>
+<option value="Entro le 12 miglia solo motore">
+  Entro le 12 miglia solo motore
+</option>
+<option value="Entro le 12 miglia motore/vela">
+  Entro le 12 miglia motore/vela
+</option>
+<option value="Integrazione senza limiti">
+  Integrazione senza limiti
+</option>
+<option value="Integrazione vela">
+  Integrazione vela
+</option>
+<option value="D1">D1</option>
+    </select>
+  </label>
+
   <label
     style={{
       display: "flex",
@@ -4494,6 +5011,7 @@ versamenti: allievo.versamenti || [],
     />
   </label>
 </div>
+
 <div
   style={{
     marginTop: "18px",
@@ -4833,6 +5351,7 @@ versamenti: allievo.versamenti || [],
     </label>
   ))}
 </div>
+
 <div
   style={{
     marginTop: "24px",
@@ -4841,19 +5360,61 @@ versamenti: allievo.versamenti || [],
   }}
 >
   <div
-  style={{
-    marginTop: "24px",
-    marginBottom: "12px",
-    paddingTop: "16px",
-    borderTop: "1px solid #e2e8f0",
-    fontSize: "13px",
-    fontWeight: "800",
-    color: "#2563eb",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  }}
+    style={{
+      marginBottom: "12px",
+      fontSize: "13px",
+      fontWeight: "800",
+      color: "#2563eb",
+      textTransform: "uppercase",
+      letterSpacing: "0.04em",
+      textAlign: "center",
+    }}
+  >
+    GENERA DOCUMENTI
+  </div>
+
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: "24px",
+    }}
+  >
+    <button
+  type="button"
+  onClick={generaCasellario}
 >
-  PATENTE NAUTICA
+  Casellario giudiziale
+</button>
+<button
+  type="button"
+  onClick={generaCertificatoMedico}
+>
+  Certificato medico
+</button>
+<button
+  type="button"
+  onClick={generaDisponibilitaEsame}
+>
+  Disponibilità esame
+</button>
+  </div>
+
+  <div
+    style={{
+      marginTop: "24px",
+      marginBottom: "12px",
+      paddingTop: "16px",
+      borderTop: "1px solid #e2e8f0",
+      fontSize: "13px",
+      fontWeight: "800",
+      color: "#2563eb",
+      textTransform: "uppercase",
+      letterSpacing: "0.04em",
+      textAlign: "center",
+    }}
+  >
+    PATENTE NAUTICA
 </div>
 <div
   style={{
