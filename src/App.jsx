@@ -103,6 +103,9 @@ const [nuovoVersamento, setNuovoVersamento] = useState({
   metodo: "",
 });
 const [allievoInModifica, setAllievoInModifica] = useState(null);
+
+const [allievoArchivioAperto, setAllievoArchivioAperto] = useState(null);
+
 const [formAllievo, setFormAllievo] = useState({
   nome: "",
   cognome: "",
@@ -117,6 +120,13 @@ const [formAllievo, setFormAllievo] = useState({
   codiceFiscale: "",
   cellulare: "",
   email: "",
+  gruppo: "",
+  dataEsameTeoria: "",
+dataEsamePratica: "",
+numeroPatenteNautica: "",
+dataRilascioPatente: "",
+scadenzaPatente: "",
+tipoPatente: "",
   documenti: {
   documentoIdentita: false,
   codiceFiscale: false,
@@ -857,7 +867,230 @@ function generaEstrattoContoAllievo(allievo) {
 
   window.open(pdfUrl, "_blank");
 }
+function generaPdfSchedaArchivio(allievo) {
+  const pdf = new jsPDF();
 
+  const euro = (valore) =>
+    `EUR ${Number(valore || 0).toFixed(2)}`;
+
+  const dataIt = (valore) =>
+    valore
+      ? new Date(valore + "T00:00:00").toLocaleDateString("it-IT")
+      : "-";
+
+  const totaleVersato = (allievo.versamenti || []).reduce(
+    (totale, versamento) =>
+      totale + Number(versamento.importo || 0),
+    0
+  );
+
+  const residuo = Math.max(
+    0,
+    Number(allievo.costoCorso || 0) - totaleVersato
+  );
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+
+  pdf.text(
+    "SCHEDA ALLIEVO ARCHIVIATO",
+    105,
+    20,
+    { align: "center" }
+  );
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    `Data stampa: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    30,
+    { align: "right" }
+  );
+
+  pdf.line(20, 35, 190, 35);
+
+  let y = 48;
+
+  const riga = (etichetta, valore) => {
+    pdf.setFont("helvetica", "bold");
+    pdf.text(`${etichetta}:`, 20, y);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.text(String(valore || "-"), 65, y);
+
+    y += 8;
+  };
+
+  riga("Nome", allievo.nome);
+  riga("Cognome", allievo.cognome);
+  riga("Data di nascita", dataIt(allievo.dataNascita));
+  riga("Luogo di nascita", allievo.luogoNascita);
+  riga("Provincia nascita", allievo.provinciaNascita);
+
+  y += 3;
+  pdf.line(20, y, 190, y);
+  y += 10;
+
+  riga(
+    "Indirizzo",
+    `${allievo.indirizzo || ""} ${allievo.civico || ""}`.trim()
+  );
+  riga("CAP", allievo.cap);
+  riga("Citta", allievo.citta);
+  riga("Provincia", allievo.provincia);
+  riga("Codice fiscale", allievo.codiceFiscale);
+  riga("Cellulare", allievo.cellulare);
+  riga("Email", allievo.email);
+  riga("Gruppo", allievo.gruppo);
+
+  y += 3;
+  pdf.line(20, y, 190, y);
+  y += 10;
+
+  riga("Costo corso", euro(allievo.costoCorso));
+  riga("Totale versato", euro(totaleVersato));
+  riga("Da pagare", euro(residuo));
+
+  y += 3;
+  pdf.line(20, y, 190, y);
+  y += 10;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+  pdf.text("PATENTE NAUTICA", 20, y);
+
+  y += 10;
+
+  pdf.setFontSize(10);
+
+  riga("Data esame teoria", dataIt(allievo.dataEsameTeoria));
+  riga("Data esame pratica", dataIt(allievo.dataEsamePratica));
+  riga("Patente nautica n.", allievo.numeroPatenteNautica);
+  riga("Tipo patente", allievo.tipoPatente);
+  riga("Rilasciata il", dataIt(allievo.dataRilascioPatente));
+  riga("Scadenza", dataIt(allievo.scadenzaPatente));
+
+  y += 3;
+  pdf.line(20, y, 190, y);
+  y += 10;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+  
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const finestraStampa = window.open(pdfUrl);
+
+  if (finestraStampa) {
+    finestraStampa.onload = () => {
+      finestraStampa.print();
+    };
+  }
+}
+function generaPdfGruppiAllievi() {
+  const pdf = new jsPDF();
+
+  const gruppi = [
+    "Lunedì",
+    "Martedì",
+    "Mercoledì",
+    "Giovedì",
+    "Venerdì",
+  ];
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+
+  pdf.text(
+    "GRUPPI ALLIEVI",
+    105,
+    20,
+    { align: "center" }
+  );
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    `Data: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    30,
+    { align: "right" }
+  );
+
+  pdf.line(20, 35, 190, 35);
+
+  let y = 48;
+
+  gruppi.forEach((gruppo) => {
+    const allieviGruppo = allievi
+      .filter(
+        (allievo) =>
+          !allievo.archiviato &&
+          allievo.gruppo === gruppo
+      )
+      .sort((a, b) =>
+        (a.cognome || "").localeCompare(
+          b.cognome || "",
+          "it"
+        )
+      );
+
+    if (y > 245) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(12);
+
+    pdf.text(
+      `${gruppo} (${allieviGruppo.length})`,
+      20,
+      y
+    );
+
+    y += 8;
+
+    pdf.setFontSize(10);
+
+    if (allieviGruppo.length === 0) {
+      pdf.setFont("helvetica", "normal");
+      pdf.text("Nessun allievo", 25, y);
+      y += 10;
+    } else {
+      allieviGruppo.forEach((allievo, index) => {
+        if (y > 270) {
+          pdf.addPage();
+          y = 20;
+        }
+
+        pdf.setFont("helvetica", "normal");
+
+        pdf.text(
+          `${index + 1}. ${allievo.cognome || ""} ${allievo.nome || ""}`,
+          25,
+          y
+        );
+
+        y += 7;
+      });
+
+      y += 5;
+    }
+
+    pdf.line(20, y, 190, y);
+    y += 12;
+  });
+
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  window.open(pdfUrl, "_blank");
+}
 function generaPdfDocumentiMancanti() {
   const pdf = new jsPDF();
 
@@ -960,15 +1193,9 @@ function generaPdfDocumentiMancanti() {
   }
 
   const pdfBlob = pdf.output("blob");
-  const pdfUrl = URL.createObjectURL(pdfBlob);
+const pdfUrl = URL.createObjectURL(pdfBlob);
 
-  const finestraStampa = window.open(pdfUrl);
-
-  if (finestraStampa) {
-    finestraStampa.onload = () => {
-      finestraStampa.print();
-    };
-  }
+window.open(pdfUrl, "_blank");
 }
 function generaPdfIncassiBonifico() {
   const pdf = new jsPDF();
@@ -1334,6 +1561,48 @@ function generaPdfIncassiContanti() {
     finestraStampa.onload = () => {
       finestraStampa.print();
     };
+  }
+}
+async function archiviaAllievo(allievo) {
+  const conferma = window.confirm(
+    `Vuoi archiviare ${allievo.nome} ${allievo.cognome}?`
+  );
+
+  if (!conferma) return;
+
+  try {
+    await updateDoc(
+      doc(db, "allievi", allievo.firebaseId),
+      {
+        archiviato: true,
+      }
+    );
+
+    alert("Allievo archiviato");
+  } catch (error) {
+    console.error("Errore archiviazione allievo:", error);
+    alert("Errore durante l'archiviazione dell'allievo.");
+  }
+}
+async function ripristinaAllievo(allievo) {
+  const conferma = window.confirm(
+    `Vuoi ripristinare ${allievo.nome} ${allievo.cognome} tra gli allievi attivi?`
+  );
+
+  if (!conferma) return;
+
+  try {
+    await updateDoc(
+      doc(db, "allievi", allievo.firebaseId),
+      {
+        archiviato: false,
+      }
+    );
+
+    alert("Allievo ripristinato");
+  } catch (error) {
+    console.error("Errore ripristino allievo:", error);
+    alert("Errore durante il ripristino dell'allievo.");
   }
 }
 async function salvaAllievo(e) {
@@ -2705,11 +2974,17 @@ if (ordinaClientiPerSaldo) {
     >
       Allievi
     </button>
+    <button
+  className={vista === "gruppiAllievi" ? "active" : ""}
+  onClick={() => setVista("gruppiAllievi")}
+>
+  Gruppi
+</button>
 
     
     <button
   type="button"
-  onClick={generaPdfDocumentiMancanti}
+  onClick={() => setVista("documentiMancanti")}
 >
   Documenti mancanti
 </button>
@@ -2728,33 +3003,6 @@ if (ordinaClientiPerSaldo) {
     height: "1px",
     background: "rgba(255,255,255,.14)",
     margin: "8px 10px",
-  }}
-/>
-<div
-  style={{
-    margin: "10px 10px 6px",
-    fontSize: "11px",
-    fontWeight: "800",
-    color: "rgba(255,255,255,0.65)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  }}
->
-  NUOVI ISCRITTI
-</div>
-<button
-  className={vista === "iscrizioni" ? "active" : ""}
-  onClick={() => setVista("iscrizioni")}
->
-  Iscrizioni
-</button>
-
-<hr
-  style={{
-    width: "calc(100% - 16px)",
-    margin: "12px 8px",
-    border: "none",
-    borderTop: "1px solid rgba(255,255,255,0.55)",
   }}
 />
 
@@ -2796,6 +3044,21 @@ if (ordinaClientiPerSaldo) {
   onClick={generaPdfIncassiContanti}
 >
   Incassi Contanti
+</button>
+<hr
+  style={{
+    width: "calc(100% - 16px)",
+    margin: "12px 8px",
+    border: "none",
+    borderTop: "1px solid rgba(255,255,255,0.55)",
+  }}
+/>
+
+<button
+  className={vista === "archivioAllievi" ? "active" : ""}
+  onClick={() => setVista("archivioAllievi")}
+>
+  Archivio
 </button>
   </>
 )}
@@ -2966,7 +3229,7 @@ left: "250px",
   )}
 </div>
 
-
+{sezione === "cantiere" && (
 <div className="sidebarStatsBottom">
 
   <div className="sidebarStatBtn">
@@ -3009,6 +3272,7 @@ left: "250px",
   </div>
 
 </div>
+)}
 </div>
 
 {(vista === "lavori" || vista === "incassi") && (
@@ -3247,7 +3511,9 @@ left: "250px",
           gap: "12px",
         }}
       >
-        {allievi.map((allievo) => (
+        {allievi
+  .filter((allievo) => !allievo.archiviato)
+  .map((allievo) => (
   <div
     key={allievo.firebaseId}
     style={{
@@ -3256,7 +3522,7 @@ left: "250px",
       borderRadius: "12px",
       padding: "16px 18px",
       display: "grid",
-      gridTemplateColumns: "1.2fr 1fr 1fr 190px",
+      gridTemplateColumns: "1.6fr 1fr 430px",
       gap: "16px",
       alignItems: "center",
     }}
@@ -3283,31 +3549,21 @@ left: "250px",
     </div>
 
     <div
-      style={{
-        fontSize: "14px",
-        color: "#334155",
-      }}
-    >
-      {allievo.cellulare || "-"}
-    </div>
+  style={{
+    fontSize: "14px",
+    color: "#334155",
+  }}
+>
+  {allievo.cellulare || "-"}
+</div>
 
-    <div
-      style={{
-        fontSize: "14px",
-        color: "#334155",
-        textAlign: "right",
-      }}
-    >
-      {allievo.citta || "-"}
-    </div>
-
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "flex-end",
-        gap: "8px",
-      }}
-    >
+<div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "8px",
+  }}
+>
     <button
   type="button"
   className="clientBtn"
@@ -3318,6 +3574,19 @@ left: "250px",
   }}
 >
   Estratto conto
+</button>
+<button
+  type="button"
+  className="clientBtn"
+  style={{
+    background: "#0f766e",
+    color: "#ffffff",
+  }}
+  onClick={() => {
+    setAllievoArchivioAperto(allievo);
+  }}
+>
+  Visualizza
 </button>
       <button
         type="button"
@@ -3337,6 +3606,13 @@ dataNascita: allievo.dataNascita || "",
             codiceFiscale: allievo.codiceFiscale || "",
             cellulare: allievo.cellulare || "",
             email: allievo.email || "",
+            gruppo: allievo.gruppo || "",
+            dataEsameTeoria: allievo.dataEsameTeoria || "",
+dataEsamePratica: allievo.dataEsamePratica || "",
+numeroPatenteNautica: allievo.numeroPatenteNautica || "",
+dataRilascioPatente: allievo.dataRilascioPatente || "",
+scadenzaPatente: allievo.scadenzaPatente || "",
+tipoPatente: allievo.tipoPatente || "",
             documenti: {
   documentoIdentita: allievo.documenti?.documentoIdentita || false,
   codiceFiscale: allievo.documenti?.codiceFiscale || false,
@@ -3356,7 +3632,17 @@ versamenti: allievo.versamenti || [],
       >
         Modifica
       </button>
-
+<button
+  type="button"
+  className="clientBtn"
+  style={{
+    background: "#475569",
+    color: "white",
+  }}
+  onClick={() => archiviaAllievo(allievo)}
+>
+  Archivia
+</button>
       <button
         type="button"
         className="clientBtn"
@@ -3374,6 +3660,273 @@ versamenti: allievo.versamenti || [],
       </div>
     )}
   </>
+)}
+{sezione === "scuola" &&
+  vista === "allievi" &&
+  allievoArchivioAperto && (
+    <div
+      style={{
+        marginTop: "24px",
+        padding: "20px",
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
+        background: "#f8fafc",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+        }}
+      >
+        <div>
+          <h3
+            style={{
+              margin: 0,
+              fontSize: "20px",
+              color: "#0f172a",
+            }}
+          >
+            Scheda allievo
+          </h3>
+
+          <div
+            style={{
+              marginTop: "4px",
+              fontSize: "13px",
+              color: "#64748b",
+            }}
+          >
+            Sola visualizzazione
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="clientBtn"
+          style={{
+            background: "#dc2626",
+            color: "#ffffff",
+            fontWeight: "800",
+            opacity: 1,
+          }}
+          onClick={() => setAllievoArchivioAperto(null)}
+        >
+          Chiudi
+        </button>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: "18px",
+        }}
+      >
+        <div>
+          <strong>Nome</strong>
+          <div>{allievoArchivioAperto.nome || "-"}</div>
+        </div>
+
+        <div>
+          <strong>Cognome</strong>
+          <div>{allievoArchivioAperto.cognome || "-"}</div>
+        </div>
+
+        <div>
+          <strong>Data di nascita</strong>
+          <div>
+            {allievoArchivioAperto.dataNascita
+              ? new Date(
+                  allievoArchivioAperto.dataNascita + "T00:00:00"
+                ).toLocaleDateString("it-IT")
+              : "-"}
+          </div>
+        </div>
+
+        <div>
+          <strong>Gruppo</strong>
+          <div>{allievoArchivioAperto.gruppo || "-"}</div>
+        </div>
+
+        <div>
+          <strong>Luogo di nascita</strong>
+          <div>{allievoArchivioAperto.luogoNascita || "-"}</div>
+        </div>
+
+        <div>
+          <strong>Provincia nascita</strong>
+          <div>{allievoArchivioAperto.provinciaNascita || "-"}</div>
+        </div>
+
+        <div>
+          <strong>Codice fiscale</strong>
+          <div>{allievoArchivioAperto.codiceFiscale || "-"}</div>
+        </div>
+
+        <div>
+          <strong>Cellulare</strong>
+          <div>{allievoArchivioAperto.cellulare || "-"}</div>
+        </div>
+
+        <div>
+          <strong>Indirizzo</strong>
+          <div>
+            {allievoArchivioAperto.indirizzo || "-"}{" "}
+            {allievoArchivioAperto.civico || ""}
+          </div>
+        </div>
+
+        <div>
+          <strong>CAP</strong>
+          <div>{allievoArchivioAperto.cap || "-"}</div>
+        </div>
+
+        <div>
+          <strong>Città</strong>
+          <div>{allievoArchivioAperto.citta || "-"}</div>
+        </div>
+
+        <div>
+          <strong>Provincia</strong>
+          <div>{allievoArchivioAperto.provincia || "-"}</div>
+        </div>
+
+        <div style={{ gridColumn: "span 2" }}>
+          <strong>Email</strong>
+          <div>{allievoArchivioAperto.email || "-"}</div>
+        </div>
+
+        <div>
+  <strong>Costo corso</strong>
+  <div>
+    € {Number(allievoArchivioAperto.costoCorso || 0).toFixed(2)}
+  </div>
+</div>
+
+<div>
+  <strong>Totale versato</strong>
+  <div>
+    €{" "}
+    {(allievoArchivioAperto.versamenti || [])
+      .reduce(
+        (totale, versamento) =>
+          totale + Number(versamento.importo || 0),
+        0
+      )
+      .toFixed(2)}
+  </div>
+</div>
+
+<div>
+  <strong>Da pagare</strong>
+  <div>
+    €{" "}
+    {Math.max(
+      0,
+      Number(allievoArchivioAperto.costoCorso || 0) -
+        (allievoArchivioAperto.versamenti || []).reduce(
+          (totale, versamento) =>
+            totale + Number(versamento.importo || 0),
+          0
+        )
+    ).toFixed(2)}
+  </div>
+</div>
+
+
+<div style={{ gridColumn: "1 / -1" }}>
+  <div
+    style={{
+      marginTop: "10px",
+      marginBottom: "14px",
+      paddingTop: "16px",
+      borderTop: "1px solid #e2e8f0",
+      fontSize: "13px",
+      fontWeight: "800",
+      color: "#2563eb",
+      textTransform: "uppercase",
+      letterSpacing: "0.04em",
+    }}
+  >
+    DOCUMENTI
+  </div>
+
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+      gap: "12px 18px",
+    }}
+  >
+    <div>
+      <strong>Documento identità</strong>
+      <div>
+        {allievoArchivioAperto.documenti?.documentoIdentita
+          ? "✓ Presente"
+          : "✗ Mancante"}
+      </div>
+    </div>
+
+    <div>
+      <strong>Codice fiscale</strong>
+      <div>
+        {allievoArchivioAperto.documenti?.codiceFiscale
+          ? "✓ Presente"
+          : "✗ Mancante"}
+      </div>
+    </div>
+
+    <div>
+      <strong>Certificato medico</strong>
+      <div>
+        {allievoArchivioAperto.documenti?.certificatoMedico
+          ? "✓ Presente"
+          : "✗ Mancante"}
+      </div>
+    </div>
+
+    <div>
+      <strong>Fototessere</strong>
+      <div>
+        {allievoArchivioAperto.documenti?.fototessere
+          ? "✓ Presente"
+          : "✗ Mancante"}
+      </div>
+    </div>
+
+    <div>
+      <strong>Bollettini</strong>
+      <div>
+        {allievoArchivioAperto.documenti?.bollettini
+          ? "✓ Presente"
+          : "✗ Mancante"}
+      </div>
+    </div>
+
+    <div>
+      <strong>Privacy</strong>
+      <div>
+        {allievoArchivioAperto.documenti?.privacy
+          ? "✓ Presente"
+          : "✗ Mancante"}
+      </div>
+    </div>
+
+    <div>
+      <strong>Autocertificazione</strong>
+      <div>
+        {allievoArchivioAperto.documenti?.autocertificazione
+          ? "✓ Presente"
+          : "✗ Mancante"}
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
 )}
 
 {mostraFormAllievo && (
@@ -3435,7 +3988,7 @@ versamenti: allievo.versamenti || [],
    <div
   style={{
     display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr 120px 0.5fr",
+    gridTemplateColumns: "1fr 1fr 1fr 120px 0.5fr 148px",
     gap: "16px",
     width: "100%",
   }}
@@ -3581,7 +4134,7 @@ versamenti: allievo.versamenti || [],
 <div
   style={{
     display: "grid",
-    gridTemplateColumns: "20% 60px 200px 50px 70px 180px 120px 290px",
+    gridTemplateColumns: "16% 60px 200px 50px 70px 180px 120px 290px 150px",
     gap: "16px",
     marginTop: "18px",
   }}
@@ -3786,6 +4339,38 @@ versamenti: allievo.versamenti || [],
     }}
   />
 </label>
+<label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+  <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+    Gruppo
+  </span>
+
+  <select
+    value={formAllievo.gruppo || ""}
+    onChange={(e) =>
+      setFormAllievo({
+        ...formAllievo,
+        gruppo: e.target.value,
+      })
+    }
+    style={{
+      width: "150px",
+      boxSizing: "border-box",
+      padding: "10px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+      background: "white",
+    }}
+  >
+    <option value="">Seleziona gruppo</option>
+    <option value="Lunedì">Lunedì</option>
+    <option value="Martedì">Martedì</option>
+    <option value="Mercoledì">Mercoledì</option>
+    <option value="Giovedì">Giovedì</option>
+    <option value="Venerdì">Venerdì</option>
+  </select>
+</label>
+
 </div>
 <div
   style={{
@@ -4190,6 +4775,162 @@ versamenti: allievo.versamenti || [],
 </div>
 <div
   style={{
+    marginTop: "24px",
+    paddingTop: "18px",
+    borderTop: "1px solid #e2e8f0",
+  }}
+>
+  <div
+  style={{
+    marginTop: "24px",
+    marginBottom: "12px",
+    paddingTop: "16px",
+    borderTop: "1px solid #e2e8f0",
+    fontSize: "13px",
+    fontWeight: "800",
+    color: "#2563eb",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  }}
+>
+  PATENTE NAUTICA
+</div>
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "140px 140px 170px 150px 140px 300px",
+    gap: "16px",
+    justifyContent: "center",
+  }}
+>
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Data esame teoria
+    </span>
+    <input
+      type="date"
+      style={{ height: "38px", boxSizing: "border-box" }}
+      value={formAllievo.dataEsameTeoria || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          dataEsameTeoria: e.target.value,
+        })
+      }
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Data esame pratica
+    </span>
+    <input
+      type="date"
+      style={{ height: "38px", boxSizing: "border-box" }}
+      value={formAllievo.dataEsamePratica || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          dataEsamePratica: e.target.value,
+        })
+      }
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Patente nautica n°
+    </span>
+    <input
+      type="text"
+      style={{ height: "38px", boxSizing: "border-box" }}
+      value={formAllievo.numeroPatenteNautica || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          numeroPatenteNautica: e.target.value,
+        })
+      }
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Rilasciata il
+    </span>
+    <input
+      type="date"
+      style={{ height: "38px", boxSizing: "border-box" }}
+      value={formAllievo.dataRilascioPatente || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          dataRilascioPatente: e.target.value,
+        })
+      }
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Scadenza
+    </span>
+    <input
+      type="date"
+      style={{ height: "38px", boxSizing: "border-box" }}
+      value={formAllievo.scadenzaPatente || ""}
+      onChange={(e) =>
+        setFormAllievo({
+          ...formAllievo,
+          scadenzaPatente: e.target.value,
+        })
+      }
+    />
+  </label>
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+  <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+    Tipo patente
+  </span>
+
+  <select
+    value={formAllievo.tipoPatente || ""}
+    onChange={(e) =>
+      setFormAllievo({
+        ...formAllievo,
+        tipoPatente: e.target.value,
+      })
+    }
+    style={{
+      width: "100%",
+      height: "38px",
+      boxSizing: "border-box",
+      padding: "8px 10px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+      background: "white",
+    }}
+  >
+    <option value="">Seleziona tipo patente</option>
+    <option value="D1">D1</option>
+    <option value="Entro le 12 miglia dalla costa solo motore">
+      Entro le 12 miglia dalla costa solo motore
+    </option>
+    <option value="Entro le 12 miglia dalla costa vela-motore">
+      Entro le 12 miglia dalla costa vela-motore
+    </option>
+    <option value="Senza limiti solo motore">
+      Senza limiti solo motore
+    </option>
+    <option value="Senza limiti vela-motore">
+      Senza limiti vela-motore
+    </option>
+  </select>
+</label>
+</div>
+</div>
+<div
+  style={{
     display: "flex",
     justifyContent: "flex-end",
     gap: "10px",
@@ -4216,6 +4957,7 @@ versamenti: allievo.versamenti || [],
         codiceFiscale: "",
         cellulare: "",
         email: "",
+        gruppo: "",
         costoCorso: "",
         versamenti: [],
       });
@@ -4483,7 +5225,678 @@ versamenti: allievo.versamenti || [],
     </div>
   </section>
 )}
+{sezione === "scuola" && vista === "documentiMancanti" && (
+  <section
+    style={{
+      width: "100%",
+      background: "#ffffff",
+      borderRadius: "14px",
+      padding: "22px",
+      boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "12px",
+        marginBottom: "20px",
+      }}
+    >
+      <h2 style={{ margin: 0 }}>Documenti mancanti</h2>
 
+      <button
+        type="button"
+        className="clientBtn"
+        style={{
+          background: "#2563eb",
+          color: "#ffffff",
+          fontWeight: "800",
+          opacity: 1,
+        }}
+        onClick={generaPdfDocumentiMancanti}
+      >
+        Stampa
+      </button>
+    </div>
+
+    {allievi
+      .filter((allievo) => {
+        if (allievo.archiviato) return false;
+
+        const documenti = allievo.documenti || {};
+
+        return (
+          !documenti.documentoIdentita ||
+          !documenti.codiceFiscale ||
+          !documenti.certificatoMedico ||
+          !documenti.fototessere ||
+          !documenti.bollettini ||
+          !documenti.privacy ||
+          !documenti.autocertificazione
+        );
+      })
+      .map((allievo) => {
+        const documenti = allievo.documenti || {};
+
+        const mancanti = [
+          !documenti.documentoIdentita && "Documento identità",
+          !documenti.codiceFiscale && "Codice fiscale",
+          !documenti.certificatoMedico && "Certificato medico",
+          !documenti.fototessere && "Fototessere",
+          !documenti.bollettini && "Bollettini",
+          !documenti.privacy && "Privacy",
+          !documenti.autocertificazione && "Autocertificazione",
+        ].filter(Boolean);
+
+        return (
+          <div
+            key={allievo.firebaseId}
+            style={{
+              padding: "14px 16px",
+              marginBottom: "12px",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              background: "#f8fafc",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: "800",
+                color: "#0f172a",
+                marginBottom: "8px",
+              }}
+            >
+              {allievo.cognome} {allievo.nome}
+            </div>
+
+            <div
+              style={{
+                fontSize: "14px",
+                color: "#dc2626",
+                lineHeight: "1.7",
+              }}
+            >
+              {mancanti.join(" • ")}
+            </div>
+          </div>
+        );
+      })}
+  </section>
+)}
+{sezione === "scuola" && vista === "gruppiAllievi" && (
+  <section
+    style={{
+      width: "100%",
+      background: "#ffffff",
+      borderRadius: "14px",
+      padding: "22px",
+      boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+    }}
+  >
+    <div
+  style={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    marginBottom: "10px",
+  }}
+>
+  <h2 style={{ margin: 0 }}>
+    Gruppi allievi
+  </h2>
+
+  <button
+    type="button"
+    className="clientBtn"
+    style={{
+      background: "#2563eb",
+      color: "#ffffff",
+      fontWeight: "800",
+      opacity: 1,
+    }}
+    onClick={generaPdfGruppiAllievi}
+  >
+    Stampa
+  </button>
+</div>
+
+    {["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì"].map(
+      (gruppo) => {
+        const allieviGruppo = allievi.filter(
+          (allievo) =>
+            !allievo.archiviato && allievo.gruppo === gruppo
+        );
+
+        return (
+          <div
+            key={gruppo}
+            style={{
+              marginTop: "20px",
+              border: "1px solid #e2e8f0",
+              borderRadius: "12px",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: "12px 16px",
+                background: "#eff6ff",
+                color: "#1d4ed8",
+                fontWeight: "800",
+                fontSize: "16px",
+              }}
+            >
+              {gruppo} ({allieviGruppo.length})
+            </div>
+
+            {allieviGruppo.length === 0 ? (
+              <div
+                style={{
+                  padding: "14px 16px",
+                  color: "#64748b",
+                  fontSize: "14px",
+                }}
+              >
+                Nessun allievo in questo gruppo
+              </div>
+            ) : (
+              allieviGruppo.map((allievo) => (
+                <div
+                  key={allievo.firebaseId}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 220px",
+                    gap: "20px",
+                    padding: "12px 16px",
+                    borderTop: "1px solid #e2e8f0",
+                    alignItems: "center",
+                  }}
+                >
+                  <strong>
+                    {allievo.cognome} {allievo.nome}
+                  </strong>
+
+                  <div style={{ color: "#64748b" }}>
+                    {allievo.cellulare || "-"}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        );
+      }
+    )}
+  </section>
+)}
+{sezione === "scuola" && vista === "archivioAllievi" && (
+  <section
+    style={{
+      width: "100%",
+      maxWidth: "1100px",
+      background: "#ffffff",
+      borderRadius: "14px",
+      padding: "22px",
+      boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "18px",
+      }}
+    >
+      <div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "22px",
+            color: "#0f172a",
+          }}
+        >
+          Archivio allievi
+        </h2>
+
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#64748b",
+          }}
+        >
+          Allievi che hanno terminato il corso
+        </div>
+      </div>
+    </div>
+
+    <input
+      type="text"
+      placeholder="Cerca per nome, cognome, codice fiscale o gruppo..."
+      value={ricercaAllievi}
+      onChange={(e) => setRicercaAllievi(e.target.value)}
+      style={{
+        width: "100%",
+        marginBottom: "18px",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+
+    <div
+      style={{
+        display: "grid",
+        gap: "12px",
+      }}
+    >
+      {allievi
+        .filter((allievo) => allievo.archiviato)
+        .filter((allievo) => {
+          const testo = [
+            allievo.nome,
+            allievo.cognome,
+            allievo.codiceFiscale,
+            allievo.gruppo,
+          ]
+            .join(" ")
+            .toLowerCase();
+
+          return testo.includes(
+            ricercaAllievi.toLowerCase()
+          );
+        })
+        .map((allievo) => (
+          <div
+            key={allievo.firebaseId}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.8fr 220px",
+              gap: "16px",
+              alignItems: "center",
+              padding: "14px 16px",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+            }}
+          >
+            <div>
+              <strong>
+                {allievo.nome} {allievo.cognome}
+              </strong>
+
+              <div
+                style={{
+                  marginTop: "4px",
+                  fontSize: "13px",
+                  color: "#64748b",
+                }}
+              >
+                {allievo.codiceFiscale || "-"}
+              </div>
+            </div>
+
+              <div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "8px",
+  }}
+>
+  <button
+    type="button"
+    className="clientBtn"
+    style={{
+      background: "#2563eb",
+      color: "white",
+    }}
+    onClick={() => {
+  setAllievoArchivioAperto(allievo);
+}}
+  >
+    Visualizza
+  </button>
+
+  <button
+  type="button"
+  className="clientBtn"
+  style={{
+    background: "#475569",
+    color: "#ffffff",
+    fontWeight: "800",
+    opacity: 1,
+  }}
+  onClick={() => ripristinaAllievo(allievo)}
+>
+  Ripristina
+</button>
+</div>
+          </div>
+        ))}
+    </div>
+    {allievoArchivioAperto && (
+  <div
+    style={{
+      marginTop: "24px",
+      padding: "20px",
+      border: "1px solid #e2e8f0",
+      borderRadius: "12px",
+      background: "#f8fafc",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "20px",
+      }}
+    >
+      <div>
+        <h3
+          style={{
+            margin: 0,
+            fontSize: "20px",
+            color: "#0f172a",
+          }}
+        >
+          Scheda allievo
+        </h3>
+
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#64748b",
+          }}
+        >
+          Allievo archiviato - sola visualizzazione
+        </div>
+      </div>
+
+     <div
+  style={{
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+  }}
+>
+  <button
+    type="button"
+    className="clientBtn"
+    style={{
+      background: "#2563eb",
+      color: "#ffffff",
+      fontWeight: "800",
+      opacity: 1,
+    }}
+    onClick={() =>
+      generaPdfSchedaArchivio(allievoArchivioAperto)
+    }
+  >
+    Stampa scheda
+  </button>
+
+  <button
+    type="button"
+    className="clientBtn"
+    style={{
+      background: "#dc2626",
+      color: "#ffffff",
+      fontWeight: "800",
+      opacity: 1,
+    }}
+    onClick={() => setAllievoArchivioAperto(null)}
+  >
+    Chiudi
+  </button>
+</div>
+</div>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+        gap: "18px",
+      }}
+    >
+      <div>
+        <strong>Nome</strong>
+        <div>{allievoArchivioAperto.nome || "-"}</div>
+      </div>
+
+      <div>
+        <strong>Cognome</strong>
+        <div>{allievoArchivioAperto.cognome || "-"}</div>
+      </div>
+
+      <div>
+        <strong>Data di nascita</strong>
+        <div>
+          {allievoArchivioAperto.dataNascita
+            ? new Date(
+                allievoArchivioAperto.dataNascita + "T00:00:00"
+              ).toLocaleDateString("it-IT")
+            : "-"}
+        </div>
+      </div>
+
+      <div>
+        <strong>Gruppo</strong>
+        <div>{allievoArchivioAperto.gruppo || "-"}</div>
+      </div>
+
+      <div>
+        <strong>Luogo di nascita</strong>
+        <div>{allievoArchivioAperto.luogoNascita || "-"}</div>
+      </div>
+
+      <div>
+        <strong>Provincia nascita</strong>
+        <div>{allievoArchivioAperto.provinciaNascita || "-"}</div>
+      </div>
+
+      <div>
+        <strong>Codice fiscale</strong>
+        <div>{allievoArchivioAperto.codiceFiscale || "-"}</div>
+      </div>
+
+      <div>
+        <strong>Cellulare</strong>
+        <div>{allievoArchivioAperto.cellulare || "-"}</div>
+      </div>
+
+      <div>
+        <strong>Indirizzo</strong>
+        <div>
+          {allievoArchivioAperto.indirizzo || "-"}{" "}
+          {allievoArchivioAperto.civico || ""}
+        </div>
+      </div>
+
+      <div>
+        <strong>CAP</strong>
+        <div>{allievoArchivioAperto.cap || "-"}</div>
+      </div>
+
+      <div>
+        <strong>Città</strong>
+        <div>{allievoArchivioAperto.citta || "-"}</div>
+      </div>
+
+      <div>
+        <strong>Provincia</strong>
+        <div>{allievoArchivioAperto.provincia || "-"}</div>
+      </div>
+
+      <div style={{ gridColumn: "span 2" }}>
+  <strong>Email</strong>
+  <div>{allievoArchivioAperto.email || "-"}</div>
+</div>
+
+      <div>
+        <strong>Costo corso</strong>
+        <div>
+          € {Number(allievoArchivioAperto.costoCorso || 0).toFixed(2)}
+        </div>
+      </div>
+      <div>
+  <strong>Da pagare</strong>
+  <div>
+    €{" "}
+    {Math.max(
+      0,
+      Number(allievoArchivioAperto.costoCorso || 0) -
+        (allievoArchivioAperto.versamenti || []).reduce(
+          (totale, versamento) =>
+            totale + Number(versamento.importo || 0),
+          0
+        )
+    ).toFixed(2)}
+  </div>
+</div>
+      <div style={{ gridColumn: "1 / -1", marginTop: "10px" }}>
+  <div
+    style={{
+      marginTop: "10px",
+      marginBottom: "12px",
+      paddingTop: "16px",
+      borderTop: "1px solid #e2e8f0",
+      fontSize: "13px",
+      fontWeight: "800",
+      color: "#2563eb",
+      textTransform: "uppercase",
+      letterSpacing: "0.04em",
+    }}
+  >
+    PATENTE NAUTICA
+  </div>
+
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+gap: "12px",
+width: "100%",
+    }}
+  >
+    <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  }}
+>
+  <strong style={{ whiteSpace: "nowrap" }}>
+    Data esame teoria
+  </strong>
+
+  <div>
+    {allievoArchivioAperto.dataEsameTeoria
+      ? new Date(
+          allievoArchivioAperto.dataEsameTeoria + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "-"}
+  </div>
+</div>
+
+    <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  }}
+>
+  <strong style={{ whiteSpace: "nowrap" }}>
+    Data esame pratica
+  </strong>
+
+  <div>
+    {allievoArchivioAperto.dataEsamePratica
+      ? new Date(
+          allievoArchivioAperto.dataEsamePratica + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "-"}
+  </div>
+</div>
+    
+<div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  }}
+>
+  <strong style={{ whiteSpace: "nowrap" }}>
+    Patente nautica n°
+  </strong>
+
+  <div>
+    {allievoArchivioAperto.numeroPatenteNautica || "-"}
+  </div>
+</div>
+    <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  }}
+>
+  <strong style={{ whiteSpace: "nowrap" }}>
+    Rilasciata il
+  </strong>
+
+  <div>
+    {allievoArchivioAperto.dataRilascioPatente
+      ? new Date(
+          allievoArchivioAperto.dataRilascioPatente + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "-"}
+  </div>
+</div>
+    <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  }}
+>
+  <strong style={{ whiteSpace: "nowrap" }}>
+    Scadenza
+  </strong>
+
+  <div>
+    {allievoArchivioAperto.scadenzaPatente
+      ? new Date(
+          allievoArchivioAperto.scadenzaPatente + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "-"}
+  </div>
+</div>
+    <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  }}
+>
+  <strong style={{ whiteSpace: "nowrap" }}>
+    Tipo patente
+  </strong>
+
+  <div>
+    {allievoArchivioAperto.tipoPatente || "-"}
+  </div>
+</div>
+  </div>
+</div>
+    </div>
+  </div>
+)}
+  </section>
+)}
           {vista === "lavori" && (
   <section className="panel">
     <h2>Nuovo lavoro</h2>
