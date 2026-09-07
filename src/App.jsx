@@ -8,6 +8,7 @@ import {
   onSnapshot,
   updateDoc,
   runTransaction,
+  getDoc,
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "./firebase";
@@ -73,6 +74,7 @@ export default function App() {
   const [allievi, setAllievi] = useState([]);
   const [caricamento, setCaricamento] = useState(true);
   const [utente, setUtente] = useState(null);
+  const [ruoloUtente, setRuoloUtente] = useState(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [erroreLogin, setErroreLogin] = useState("");
@@ -153,6 +155,11 @@ const [filtroAnnoRimessaggi, setFiltroAnnoRimessaggi] = useState(
   const [filtroPagamentoRimessaggi, setFiltroPagamentoRimessaggi] = useState("Tutti");
   const [vista, setVista] = useState("dashboard");
   const [sezione, setSezione] = useState("cantiere");
+  useEffect(() => {
+  if (ruoloUtente === "scuola") {
+    setSezione("scuola");
+  }
+}, [ruoloUtente]);
   const [preventivoDaStampare, setPreventivoDaStampare] = useState(null);
   const [rimessaggioDaStampare, setRimessaggioDaStampare] = useState(null);
   const [lavoroDaStampare, setLavoroDaStampare] = useState(null);
@@ -176,85 +183,136 @@ setMostraFormCliente(true);
 }
 
   useEffect(() => {
-    const stopAuth = onAuthStateChanged(auth, (user) => {
-      setUtente(user);
-      setCaricamento(false);
-    });
+  const stopAuth = onAuthStateChanged(auth, async (user) => {
+    setUtente(user);
 
-    return () => stopAuth();
-  }, []);
+    if (user) {
+      try {
+        const ruoloRef = doc(db, "utenti", user.uid);
+        const ruoloSnap = await getDoc(ruoloRef);
 
-  useEffect(() => {
-    if (!utente) {
-      setLavori([]);
-      setPreventivi([]);
-      return;
+        if (ruoloSnap.exists()) {
+          const datiRuolo = ruoloSnap.data();
+
+          setRuoloUtente(datiRuolo.ruolo || null);
+        } else {
+          setRuoloUtente(null);
+        }
+      } catch (error) {
+        console.error("Errore lettura ruolo utente:", error);
+        setRuoloUtente(null);
+      }
+    } else {
+      setRuoloUtente(null);
     }
 
-   const stopLavori = onSnapshot(collection(db, "lavori"), (snapshot) => {
-  const dati = snapshot.docs
-    .map((documento) => ({
-      ...documento.data(),
-      firebaseId: documento.id,
-    }))
-    .sort((a, b) => {
-      if (a.stato === "Terminato" && b.stato !== "Terminato") return 1;
-      if (a.stato !== "Terminato" && b.stato === "Terminato") return -1;
+    setCaricamento(false);
+  });
 
-      if (!a.consegna) return 1;
-      if (!b.consegna) return -1;
+  return () => stopAuth();
+}, []);
 
-      return new Date(a.consegna) - new Date(b.consegna);
-    });
-
-  setLavori(dati);
-});
-const stopRimessaggi = onSnapshot(
-  collection(db, "rimessaggi"),
-  (snapshot) => {
-    const dati = snapshot.docs.map((documento) => ({
-      ...documento.data(),
-      firebaseId: documento.id,
-    }));
-
-    setRimessaggi(dati);
+  useEffect(() => {
+  if (!utente || !ruoloUtente) {
+    setLavori([]);
+    setPreventivi([]);
+    setRimessaggi([]);
+    setClientiDb([]);
+    setAllievi([]);
+    return;
   }
-);
-const stopAllievi = onSnapshot(
-  collection(db, "allievi"),
-  (snapshot) => {
-    const dati = snapshot.docs.map((documento) => ({
-      ...documento.data(),
-      firebaseId: documento.id,
-    }));
 
-    setAllievi(dati);
+  const stopAllievi = onSnapshot(
+    collection(db, "allievi"),
+    (snapshot) => {
+      const dati = snapshot.docs.map((documento) => ({
+        ...documento.data(),
+        firebaseId: documento.id,
+      }));
+
+      setAllievi(dati);
+    }
+  );
+
+  let stopLavori = null;
+  let stopRimessaggi = null;
+  let stopPreventivi = null;
+  let stopClienti = null;
+
+  if (ruoloUtente === "admin") {
+    stopLavori = onSnapshot(
+      collection(db, "lavori"),
+      (snapshot) => {
+        const dati = snapshot.docs
+          .map((documento) => ({
+            ...documento.data(),
+            firebaseId: documento.id,
+          }))
+          .sort((a, b) => {
+            if (a.stato === "Terminato" && b.stato !== "Terminato") return 1;
+            if (a.stato !== "Terminato" && b.stato === "Terminato") return -1;
+
+            if (!a.consegna) return 1;
+            if (!b.consegna) return -1;
+
+            return new Date(a.consegna) - new Date(b.consegna);
+          });
+
+        setLavori(dati);
+      }
+    );
+
+    stopRimessaggi = onSnapshot(
+      collection(db, "rimessaggi"),
+      (snapshot) => {
+        const dati = snapshot.docs.map((documento) => ({
+          ...documento.data(),
+          firebaseId: documento.id,
+        }));
+
+        setRimessaggi(dati);
+      }
+    );
+
+    stopPreventivi = onSnapshot(
+      collection(db, "preventivi"),
+      (snapshot) => {
+        const dati = snapshot.docs.map((documento) => ({
+          firebaseId: documento.id,
+          ...documento.data(),
+        }));
+
+        setPreventivi(dati);
+      }
+    );
+
+    stopClienti = onSnapshot(
+      collection(db, "clienti"),
+      (snapshot) => {
+        const dati = snapshot.docs.map((documento) => ({
+          firebaseId: documento.id,
+          ...documento.data(),
+        }));
+
+        setClientiDb(dati);
+      }
+    );
+  } else {
+    setLavori([]);
+    setPreventivi([]);
+    setRimessaggi([]);
+    setClientiDb([]);
   }
-);
-    const stopPreventivi = onSnapshot(collection(db, "preventivi"), (snapshot) => {
-      const dati = snapshot.docs.map((documento) => ({
-        firebaseId: documento.id,
-        ...documento.data(),
-      }));
-      setPreventivi(dati);
-    });
 
-    const stopClienti = onSnapshot(collection(db, "clienti"), (snapshot) => {
-      const dati = snapshot.docs.map((documento) => ({
-        firebaseId: documento.id,
-        ...documento.data(),
-      }));
-      setClientiDb(dati);
-    });
+  return () => {
+    stopAllievi();
 
-   return () => {
-  stopLavori();
-  stopPreventivi();
-  stopClienti();
-  stopRimessaggi();
-  stopAllievi();
-};
-  }, [utente]);
+    if (stopLavori) stopLavori();
+    if (stopPreventivi) stopPreventivi();
+    if (stopClienti) stopClienti();
+    if (stopRimessaggi) stopRimessaggi();
+  };
+}, [utente, ruoloUtente]);
 
   async function accedi(e) {
     e.preventDefault();
@@ -2873,16 +2931,18 @@ if (ordinaClientiPerSaldo) {
   <div className="sidebarTitle">SEA SRLS</div>
 
   <div className="sidebarSectionSwitch">
-    <button
-      type="button"
-      className={sezione === "cantiere" ? "activeSection" : ""}
-      onClick={() => {
-        setSezione("cantiere");
-        setVista("dashboard");
-      }}
-    >
-      Cantiere
-    </button>
+    {ruoloUtente === "admin" && (
+  <button
+    type="button"
+    className={sezione === "cantiere" ? "activeSection" : ""}
+    onClick={() => {
+      setSezione("cantiere");
+      setVista("dashboard");
+    }}
+  >
+    Cantiere
+  </button>
+)}
 
     <button
       type="button"
