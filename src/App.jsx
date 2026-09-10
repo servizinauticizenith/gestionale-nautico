@@ -45,6 +45,7 @@ function nuovoLavoroVuoto() {
     oreManodopera: "",
     prezzoOra: "60",
     altro: "",
+altriCosti: "",
     acconto: "",
     pagamento: "Non pagato",   // ← AGGIUNGI QUESTA RIGA
     note: "",
@@ -53,18 +54,24 @@ function nuovoLavoroVuoto() {
 
 function nuovoPreventivoVuoto() {
   return {
-    id: "",
-    data: new Date().toISOString().slice(0, 10),
-    cliente: "",
-    telefono: "",
-    barca: "",
-    motore: "",
-    matricola: "",
-    descrizione: "",
-    altro: "",
-    stato: "Da preparare",
-    note: "",
-  };
+  id: "",
+  data: new Date().toISOString().slice(0, 10),
+  cliente: "",
+  telefono: "",
+  barca: "",
+  motore: "",
+  matricola: "",
+  titolo: "",
+  descrizione: "",
+  ricambiDettaglio: [],
+  costoRicambi: "",
+  oreManodopera: "",
+  prezzoOra: "60",
+  rimessaggio: "",
+  altro: "",
+  stato: "Da preparare",
+  note: "",
+};
 }
 
 export default function App() {
@@ -80,13 +87,19 @@ export default function App() {
   const [erroreLogin, setErroreLogin] = useState("");
   const [form, setForm] = useState(nuovoLavoroVuoto());
   const [lavoroInModifica, setLavoroInModifica] = useState(null);
+  const [mostraFormLavoro, setMostraFormLavoro] = useState(false);
   const [rimessaggioInModifica, setRimessaggioInModifica] = useState(null);
+  const [mostraFormRimessaggio, setMostraFormRimessaggio] = useState(false);
   const [formPreventivo, setFormPreventivo] = useState(nuovoPreventivoVuoto());
   const [ricercaClientePreventivo, setRicercaClientePreventivo] = useState("");
   const [formCliente, setFormCliente] = useState({
-    
   cliente: "",
   telefono: "",
+  indirizzo: "",
+  cap: "",
+  citta: "",
+  provincia: "",
+  codiceFiscale: "",
   barca: "",
   motore: "",
   matricola: "",
@@ -95,6 +108,7 @@ export default function App() {
 const [mostraFormCliente, setMostraFormCliente] = useState(false);
 const [clienteInModifica, setClienteInModifica] = useState(null);
 const [clienteAperto, setClienteAperto] = useState(null);
+const [clienteOrigineScheda, setClienteOrigineScheda] = useState(null);
 const [ordinaClientiPerSaldo, setOrdinaClientiPerSaldo] = useState(false);
 const [ricercaGlobale, setRicercaGlobale] = useState("");
 const [ricercaAllievi, setRicercaAllievi] = useState("");
@@ -148,6 +162,7 @@ tipoCorso: "",
 versamenti: [],
 });
   const [preventivoInModifica, setPreventivoInModifica] = useState(null);
+  const [mostraFormPreventivo, setMostraFormPreventivo] = useState(false);
   const [ricerca, setRicerca] = useState("");
   const [ricercaClienteLavoro, setRicercaClienteLavoro] = useState("");
   const [filtroStato, setFiltroStato] = useState("Tutti");
@@ -160,6 +175,7 @@ const [filtroAnnoRimessaggi, setFiltroAnnoRimessaggi] = useState(
 );
 
 const [filtroPagamentoRimessaggi, setFiltroPagamentoRimessaggi] = useState("Tutti");
+const [filtroStatoBarcaRimessaggi, setFiltroStatoBarcaRimessaggi] = useState("Tutti");
 
 const [vista, setVista] = useState("dashboard");
 
@@ -180,6 +196,11 @@ function modificaCliente(cliente) {
     firebaseId: cliente.firebaseId || "",
     cliente: cliente.cliente || "",
     telefono: cliente.telefono || "",
+    indirizzo: cliente.indirizzo || "",
+    cap: cliente.cap || "",
+    citta: cliente.citta || "",
+    provincia: cliente.provincia || "",
+    codiceFiscale: cliente.codiceFiscale || "",
     barca: cliente.barca || "",
     motore: cliente.motore || "",
     matricola: cliente.matricola || "",
@@ -187,10 +208,18 @@ function modificaCliente(cliente) {
   });
 
   setClienteInModifica(cliente.firebaseId);
-  
 setMostraFormCliente(true);
-  setVista("clienti");
+setVista("clienti");
+
+setTimeout(() => {
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+}, 100);
 }
+
+
 
   useEffect(() => {
   const stopAuth = onAuthStateChanged(auth, (user) => {
@@ -2087,13 +2116,18 @@ async function salvaCliente(e) {
   alert(clienteInModifica ? "Cliente aggiornato" : "Cliente salvato");
 
   setFormCliente({
-    Cliente: "",
-    telefono: "",
-    barca: "",
-    motore: "",
-    matricola: "",
-    note: "",
-  });
+  cliente: "",
+  telefono: "",
+  indirizzo: "",
+  cap: "",
+  citta: "",
+  provincia: "",
+  codiceFiscale: "",
+  barca: "",
+  motore: "",
+  matricola: "",
+  note: "",
+});
   setMostraFormCliente(false);
 }
   async function aggiungiLavoro(e) {
@@ -2140,7 +2174,17 @@ async function salvaCliente(e) {
     );
   }
 alert("Lavoro salvato");
-  setForm(nuovoLavoroVuoto());
+
+setForm(nuovoLavoroVuoto());
+setLavoroInModifica(null);
+setMostraFormLavoro(false);
+
+if (clienteOrigineScheda) {
+  setVista("clienti");
+  setClienteAperto(clienteOrigineScheda);
+  setClienteOrigineScheda(null);
+}
+
 }
 async function generaNumeroRimessaggio() {
   const anno = new Date().getFullYear();
@@ -2230,6 +2274,16 @@ const datiRimessaggio = {
   ...form,
   id: idRimessaggio,
   tipo: "rimessaggio",
+  statoBarca: form.statoBarca || "Da recuperare",
+  dataRitiro: form.dataRitiro || "",
+  luogoRitiro: form.luogoRitiro || "",
+  carrello: form.carrello || "No",
+  targaCarrello:
+    (form.carrello || "No") === "Sì"
+      ? form.targaCarrello || ""
+      : "",
+        chiavi: form.chiavi || "No",
+  cuscini: form.cuscini || "No",
 };
 
   if (rimessaggioInModifica) {
@@ -2250,7 +2304,15 @@ const datiRimessaggio = {
     alert("Rimessaggio salvato");
   }
 
-  setForm(nuovoLavoroVuoto());
+   setForm(nuovoLavoroVuoto());
+  setRimessaggioInModifica(null);
+  setMostraFormRimessaggio(false);
+  if (clienteOrigineScheda) {
+  setVista("clienti");
+  setClienteAperto(clienteOrigineScheda);
+  setClienteOrigineScheda(null);
+}
+  
 }
 
   async function aggiungiPreventivo(e) {
@@ -2283,6 +2345,8 @@ const datiPreventivo = {
 alert("Preventivo salvato");
 
 setFormPreventivo(nuovoPreventivoVuoto());
+setPreventivoInModifica(null);
+setMostraFormPreventivo(false);
   }
 
   async function aggiornaCampo(firebaseId, campo, valore) {
@@ -2386,16 +2450,23 @@ async function eliminaPreventivo(firebaseId) {
     annullaModificaPreventivo();
   }
 }
-  function modificaPreventivo(preventivo) {
-    setVista("preventivi");
-    setPreventivoInModifica(preventivo.firebaseId);
-    setFormPreventivo({
-      ...nuovoPreventivoVuoto(),
-      ...preventivo,
-    });
+ function modificaPreventivo(preventivo) {
+  setVista("preventivi");
+  setRicerca("");
+  setPreventivoInModifica(preventivo.firebaseId);
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+  setFormPreventivo({
+    ...nuovoPreventivoVuoto(),
+    ...preventivo,
+  });
+
+  setMostraFormPreventivo(true);
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+}
 
   function annullaModificaPreventivo() {
     setPreventivoInModifica(null);
@@ -2413,7 +2484,19 @@ function pulisciHtml(testo) {
   const totale = calcolaTotale(preventivo);
   const manodopera = numero(preventivo.oreManodopera) * numero(preventivo.prezzoOra);
 
-  const finestra = window.open("", "_blank");
+  const iframe = document.createElement("iframe");
+
+iframe.style.position = "fixed";
+iframe.style.right = "0";
+iframe.style.bottom = "0";
+iframe.style.width = "0";
+iframe.style.height = "0";
+iframe.style.border = "0";
+iframe.style.visibility = "hidden";
+
+document.body.appendChild(iframe);
+
+const finestra = iframe.contentWindow;
 
   finestra.document.write(`
     <html>
@@ -2424,6 +2507,8 @@ function pulisciHtml(testo) {
             font-family: Arial, sans-serif;
             color: #111827;
             padding: 30px;
+            -webkit-print-color-adjust: exact;
+print-color-adjust: exact;
           }
             .logo-text h1 {
   margin: 0;
@@ -2577,17 +2662,173 @@ padding-top: 10px;
   </div>
 </div>
 <div class="section">
- <h2 style="text-align: center;">Ricambi</h2>
-
-  <div
+  <h2
   style="
-    min-height: 350px;
-    white-space: pre-wrap;
-    padding-top: 10px;
+    text-align: center;
+    background: #174a7e;
+    color: white;
+    margin: -1px -1px 0 -1px;
+    padding: 10px;
+    border-radius: 8px 8px 0 0;
+    font-size: 16px;
   "
 >
-  ${preventivo.ricambi || "-"}
+  Ricambi / materiali
+</h2>
+
+  ${
+    (preventivo.ricambiDettaglio || []).length > 0
+      ? `
+        <div style="margin-top: 12px;">
+          <table
+            style="
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 14px;
+            "
+          >
+            <thead>
+              <tr>
+                <th
+                  style="
+                    text-align: left;
+                    border-bottom: 1px solid #999;
+                    padding: 8px;
+                  "
+                >
+                  Descrizione
+                </th>
+
+                <th
+                  style="
+                    text-align: center;
+                    border-bottom: 1px solid #999;
+                    padding: 8px;
+                    width: 70px;
+                  "
+                >
+                  Qtà
+                </th>
+
+                <th
+                  style="
+                    text-align: right;
+                    border-bottom: 1px solid #999;
+                    padding: 8px;
+                    width: 120px;
+                  "
+                >
+                  Prezzo
+                </th>
+
+                <th
+                  style="
+                    text-align: right;
+                    border-bottom: 1px solid #999;
+                    padding: 8px;
+                    width: 120px;
+                  "
+                >
+                  Totale
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${(preventivo.ricambiDettaglio || [])
+                .map(
+  (ricambio, index) => `
+    <tr
+      style="
+        background: ${index % 2 === 0 ? "#ffffff" : "#f2f8fc"};
+      "
+    >
+                      <td
+                        style="
+                          padding: 8px;
+                          border-bottom: 1px solid #ddd;
+                        "
+                      >
+                        ${ricambio.descrizione || "-"}
+                      </td>
+
+                      <td
+                        style="
+                          padding: 8px;
+                          text-align: center;
+                          border-bottom: 1px solid #ddd;
+                        "
+                      >
+                        ${ricambio.quantita || 0}
+                      </td>
+
+                      <td
+                        style="
+                          padding: 8px;
+                          text-align: right;
+                          border-bottom: 1px solid #ddd;
+                        "
+                      >
+                        ${euro(numero(ricambio.prezzo))}
+                      </td>
+
+                      <td
+                        style="
+                          padding: 8px;
+                          text-align: right;
+                          border-bottom: 1px solid #ddd;
+                        "
+                      >
+                        ${euro(
+                          numero(ricambio.quantita) *
+                            numero(ricambio.prezzo)
+                        )}
+                      </td>
+                    </tr>
+                  `
+                )
+                .join("")}
+            </tbody>
+          </table>
+
+          <div
+            style="
+              text-align: right;
+              margin-top: 0px;
+              padding: 12px;
+              font-weight: bold;
+              background: #f2f8fc;
+              border-top: 1px solid #b8cfdf;
+            "
+          >
+            Totale ricambi:
+            ${euro(
+              (preventivo.ricambiDettaglio || []).reduce(
+                (totale, ricambio) =>
+                  totale +
+                  numero(ricambio.quantita) *
+                    numero(ricambio.prezzo),
+                0
+              )
+            )}
+          </div>
+        </div>
+      `
+      : `
+        <div
+          style="
+            padding: 12px;
+            min-height: 320px;
+            white-space: pre-wrap;
+            text-align: left;
+          "
+        >
+          Nessun ricambio inserito.
+        </div>
+      `
+  }
 </div>
+
 </div>
 
         <div class="section pageBreak">
@@ -2626,9 +2867,17 @@ padding-top: 10px;
 
   <div class="priceRows">
     <div>
-      <span>Ricambi</span>
-      <strong>${euro(preventivo.costoRicambi || 0)}</strong>
-    </div>
+  <span>Ricambi</span>
+  <strong>${euro(
+    (preventivo.ricambiDettaglio || []).reduce(
+      (totale, ricambio) =>
+        totale +
+        numero(ricambio.quantita) *
+          numero(ricambio.prezzo),
+      0
+    )
+  )}</strong>
+</div>
 
     <div>
       <span>Manodopera (${preventivo.oreManodopera || 0} h × ${euro(preventivo.prezzoOra || 0)})</span>
@@ -2636,9 +2885,14 @@ padding-top: 10px;
     </div>
 
     <div>
-      <span>Altro</span>
-      <strong>${euro(preventivo.altro || 0)}</strong>
-    </div>
+  <span>Rimessaggio</span>
+  <strong>${euro(preventivo.rimessaggio || 0)}</strong>
+</div>
+
+<div>
+  <span>Altri costi</span>
+  <strong>${euro(preventivo.altro || 0)}</strong>
+</div>
 
     <div class="total">
       <span>Totale preventivo</span>
@@ -2676,16 +2930,23 @@ padding-top: 10px;
   Validità offerta: 7 giorni
 </p>
         
-        <script>
-          window.onload = function() {
-            window.print();
-          };
-        </script>
+        
       </body>
     </html>
   `);
 
-  finestra.document.close();
+ finestra.document.close();
+
+setTimeout(() => {
+  try {
+    finestra.focus();
+    finestra.print();
+  } finally {
+    setTimeout(() => {
+      iframe.remove();
+    }, 1000);
+  }
+}, 300);
 }
 
   function compilaPreventivoDaLavoro(lavoro) {
@@ -2707,30 +2968,102 @@ padding-top: 10px;
   if (!confirm("Vuoi trasformare questo preventivo in un lavoro?")) return;
 
   try {
+    const idLavoro = await generaNumeroLavoro();
+
+    const costoRicambi = (preventivo.ricambiDettaglio || []).reduce(
+      (totale, ricambio) =>
+        totale +
+        numero(ricambio.quantita) *
+          numero(ricambio.prezzo),
+      0
+    );
+const clienteArchivio = clientiDb.find((c) => {
+  const stessoNome =
+    preventivo.cliente &&
+    (c.cliente || "").trim().toLowerCase() ===
+      preventivo.cliente.trim().toLowerCase();
+
+  const stessaMatricola =
+    preventivo.matricola &&
+    (c.matricola || "").trim().toLowerCase() ===
+      preventivo.matricola.trim().toLowerCase();
+
+  return stessoNome || stessaMatricola;
+});
+
     const nuovoLavoro = {
       ...nuovoLavoroVuoto(),
-      cliente: preventivo.cliente || "",
-      telefono: preventivo.telefono || "",
+
+      id: idLavoro,
+
+      cliente:
+  preventivo.cliente ||
+  clienteArchivio?.cliente ||
+  "",
+
+telefono:
+  preventivo.telefono ||
+  clienteArchivio?.telefono ||
+  "",
       barca: preventivo.barca || "",
       motore: preventivo.motore || "",
       matricola: preventivo.matricola || "",
+
+      titolo: preventivo.titolo || "",
       lavoro: preventivo.descrizione || "",
-      ricambi: preventivo.ricambi || "",
+
+      ricambiDettaglio: preventivo.ricambiDettaglio || [],
+      costoRicambi: String(costoRicambi),
+
+      oreManodopera: preventivo.oreManodopera || "",
+      prezzoOra: preventivo.prezzoOra || "60",
+      altro: preventivo.rimessaggio || "",
+altriCosti: preventivo.altro || "",
+
       note: preventivo.note || "",
+
       stato: "In lavorazione",
+      pagamento: "Non pagato",
+
       ingresso: new Date().toISOString().slice(0, 10),
+      consegna: "",
+
+      acconto: "",
+      tecnico: "",
+      interventiEseguiti: "",
     };
 
-    await addDoc(collection(db, "lavori"), nuovoLavoro);
+    await addDoc(
+      collection(db, "lavori"),
+      nuovoLavoro
+    );
 
-    await deleteDoc(doc(db, "preventivi", preventivo.firebaseId));
+    await deleteDoc(
+      doc(db, "preventivi", preventivo.firebaseId)
+    );
 
-    alert("Preventivo trasformato in lavoro ed eliminato dai preventivi.");
+    alert(
+      "Preventivo trasformato in lavoro ed eliminato dai preventivi."
+    );
 
+    setForm(nuovoLavoro);
+    setLavoroInModifica(null);
+    setMostraFormLavoro(true);
     setVista("lavori");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   } catch (errore) {
-    console.error("Errore conversione preventivo:", errore);
-    alert("Errore: il preventivo non è stato eliminato. Controlla la console.");
+    console.error(
+      "Errore conversione preventivo:",
+      errore
+    );
+
+    alert(
+      "Errore durante la trasformazione del preventivo in lavoro."
+    );
   }
 }
 
@@ -2866,6 +3199,12 @@ const matchPagamento =
     )
   ) ||
   pagamentoRimessaggio === filtroPagamentoRimessaggi;
+  const statoBarcaRimessaggio =
+  r.statoBarca || "Da recuperare";
+
+const matchStatoBarca =
+  filtroStatoBarcaRimessaggi === "Tutti" ||
+  statoBarcaRimessaggio === filtroStatoBarcaRimessaggi;
 
     const annoRimessaggio = r.ingresso
       ? new Date(r.ingresso).getFullYear().toString()
@@ -2875,13 +3214,19 @@ const matchPagamento =
       filtroAnnoRimessaggi === "Tutti" ||
       annoRimessaggio === filtroAnnoRimessaggi;
 
-    return matchRicerca && matchPagamento && matchAnno;
+    return (
+  matchRicerca &&
+  matchPagamento &&
+  matchAnno &&
+  matchStatoBarca
+);
   });
 }, [
   rimessaggi,
   filtroPagamentoRimessaggi,
   filtroAnnoRimessaggi,
   ricerca,
+  filtroStatoBarcaRimessaggi,
 ]);
    
   const clientiFiltrati = useMemo(() => {
@@ -3305,24 +3650,26 @@ if (ordinaClientiPerSaldo) {
 
 {sezione === "cantiere" && (
   <button
-    className={vista === "lavori" ? "active" : ""}
-    onClick={() => {
-      setVista("lavori");
-      setForm(nuovoLavoroVuoto());
-      setLavoroInModifica(null);
-    }}
-  >
-    Lavori
-  </button>
+  className={vista === "lavori" ? "active" : ""}
+  onClick={() => {
+    setVista("lavori");
+    setForm(nuovoLavoroVuoto());
+    setLavoroInModifica(null);
+    setMostraFormLavoro(false);
+  }}
+>
+  Lavori
+</button>
 )}
 {sezione === "cantiere" && (
   <button
     className={vista === "rimessaggi" ? "active" : ""}
     onClick={() => {
-      setVista("rimessaggi");
-      setForm(nuovoLavoroVuoto());
-      setRimessaggioInModifica(null);
-    }}
+  setVista("rimessaggi");
+  setForm(nuovoLavoroVuoto());
+  setRimessaggioInModifica(null);
+  setMostraFormRimessaggio(false);
+}}
   >
     Rimessaggi
   </button>
@@ -3330,15 +3677,16 @@ if (ordinaClientiPerSaldo) {
 
     {sezione === "cantiere" && (
   <button
-    className={vista === "preventivi" ? "active" : ""}
-    onClick={() => {
-      setVista("preventivi");
-      setFormPreventivo(nuovoPreventivoVuoto());
-      setPreventivoInModifica(null);
-    }}
-  >
-    Preventivi
-  </button>
+  className={vista === "preventivi" ? "active" : ""}
+  onClick={() => {
+    setVista("preventivi");
+    setFormPreventivo(nuovoPreventivoVuoto());
+    setPreventivoInModifica(null);
+    setMostraFormPreventivo(false);
+  }}
+>
+  Preventivi
+</button>
 )}
 {sezione === "scuola" && (
   <>
@@ -3746,6 +4094,30 @@ left: "250px",
 
 {vista === "rimessaggi" && (
   <>
+  <div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    marginBottom: "14px",
+  }}
+>
+  <button
+    type="button"
+    className="primary"
+    onClick={() => {
+      setForm(nuovoLavoroVuoto());
+      setRimessaggioInModifica(null);
+      setMostraFormRimessaggio(true);
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    }}
+  >
+    + Nuovo rimessaggio
+  </button>
+</div>
     <div
       style={{
         marginLeft: "650px",   // regola il valore
@@ -3776,6 +4148,19 @@ left: "250px",
   <option value="Da pagare">Da pagare</option>
   <option value="Pagato">Pagato</option>
   <option value="Fatturato">Fatturato</option>
+</select>
+<select
+  value={filtroStatoBarcaRimessaggi}
+  onChange={(e) =>
+    setFiltroStatoBarcaRimessaggi(e.target.value)
+  }
+>
+  <option value="Tutti">Tutte le barche</option>
+  <option value="Da recuperare">Da recuperare</option>
+  <option value="In cantiere">In cantiere</option>
+  <option value="Consegnata">
+    Cosegnata
+  </option>
 </select>
 
 <button
@@ -3818,14 +4203,17 @@ left: "250px",
 <main
   className="layout"
   style={{
-    gridTemplateColumns:
-  vista === "clienti" ||
-  vista === "incassi" ||
-  vista === "allievi" ||
-  vista === "incassiScuola"
-    ? "1fr"
-    : "minmax(0, 1fr) minmax(620px, 1.35fr)",
-  }}
+  gridTemplateColumns:
+    vista === "clienti" ||
+    vista === "incassi" ||
+    vista === "allievi" ||
+    vista === "incassiScuola" ||
+    (vista === "rimessaggi" && !mostraFormRimessaggio) ||
+    (vista === "lavori" && !mostraFormLavoro) ||
+    (vista === "preventivi" && !mostraFormPreventivo)
+      ? "1fr"
+      : "minmax(0, 1fr) minmax(620px, 1.35fr)",
+}}
 >
   {sezione === "scuola" && vista === "allievi" && (
   <section
@@ -6518,7 +6906,7 @@ width: "100%",
 )}
   </section>
 )}
-          {vista === "lavori" && (
+          {vista === "lavori" && mostraFormLavoro && (
   <section className="panel">
     <h2>Nuovo lavoro</h2>
 
@@ -6579,17 +6967,27 @@ width: "100%",
     gap: "12px",
   }}
 >
-  <Input
-    label="Cliente *"
-    value={form.cliente || ""}
-    onChange={(v) => setForm({ ...form, cliente: v })}
-  />
+ <Input
+  label="Cliente *"
+  value={form.cliente || ""}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      cliente: v,
+    })
+  }
+/>
 
-  <Input
-    label="Telefono"
-    value={form.telefono || ""}
-    onChange={(v) => setForm({ ...form, telefono: v })}
-  />
+<Input
+  label="Telefono"
+  value={form.telefono || ""}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      telefono: v,
+    })
+  }
+/>
 </div>
 
 <div
@@ -6787,13 +7185,17 @@ width: "100%",
   />
 </div>
 
+
 <div className="twoCols">
   <Input
     label="Costo ora euro"
     type="number"
     value={form.prezzoOra || ""}
     onChange={(v) =>
-      setForm({ ...form, prezzoOra: v })
+      setForm({
+        ...form,
+        prezzoOra: v,
+      })
     }
   />
 
@@ -6802,41 +7204,81 @@ width: "100%",
     type="number"
     value={form.altro || ""}
     onChange={(v) =>
-      setForm({ ...form, altro: v })
+      setForm({
+        ...form,
+        altro: v,
+      })
     }
   />
 </div>
+
 <div className="twoCols">
+  <Input
+    label="Altri costi euro"
+    type="number"
+    value={form.altriCosti || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        altriCosti: v,
+      })
+    }
+  />
+
   <Input
     label="Acconto euro"
     type="number"
     value={form.acconto || ""}
     onChange={(v) =>
-      setForm({ ...form, acconto: v })
+      setForm({
+        ...form,
+        acconto: v,
+      })
     }
   />
-
-  <Input
-    label="Saldo euro"
-    value={String(
-      numero(form.costoRicambi) +
-      numero(form.oreManodopera) *
-        numero(form.prezzoOra) +
-      numero(form.altro) -
-      numero(form.acconto)
+</div>
+<div
+  className="totalBox"
+  style={{
+    color: "#dc2626",
+  }}
+>
+  Saldo da incassare:{" "}
+  <strong>
+    {euro(
+      Math.max(
+        0,
+        (form.ricambiDettaglio || []).reduce(
+          (totale, ricambio) =>
+            totale +
+            numero(ricambio.quantita) *
+              numero(ricambio.prezzo),
+          0
+        ) +
+          numero(form.oreManodopera) *
+            numero(form.prezzoOra) +
+          numero(form.altro) +
+          numero(form.altriCosti) -
+          numero(form.acconto)
+      )
     )}
-    onChange={() => {}}
-    readOnly
-  />
+  </strong>
 </div>
 <div className="totalBox">
   Totale lavoro:{" "}
   <strong>
     {euro(
-      numero(form.costoRicambi) +
-      numero(form.oreManodopera) *
-        numero(form.prezzoOra) +
-      numero(form.altro)
+      (form.ricambiDettaglio || []).reduce(
+        (totale, ricambio) =>
+          totale +
+          numero(ricambio.quantita) *
+            numero(ricambio.prezzo),
+        0
+      ) +
+        numero(form.oreManodopera) *
+          numero(form.prezzoOra) +
+        numero(form.altro) +
+        numero(form.altriCosti)
     )}
   </strong>
 </div>
@@ -6888,15 +7330,79 @@ width: "100%",
         onChange={(v) => setForm({ ...form, note: v })}
       />
 
-      <button className="primary" type="submit">
-        {lavoroInModifica ? "Aggiorna lavoro" : "Aggiungi lavoro"}
-      </button>
+      <div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "10px",
+    marginTop: "16px",
+  }}
+>
+  <button
+    type="button"
+    onClick={() => {
+  setForm(nuovoLavoroVuoto());
+  setLavoroInModifica(null);
+  setMostraFormLavoro(false);
+
+  if (clienteOrigineScheda) {
+    setVista("clienti");
+    setClienteAperto(clienteOrigineScheda);
+    setClienteOrigineScheda(null);
+  }
+}}
+    style={{
+      padding: "9px 18px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      background: "#ffffff",
+      cursor: "pointer",
+      fontWeight: "600",
+      color: "#475569",
+    }}
+  >
+    Annulla
+  </button>
+
+  <button
+    className="primary"
+    type="submit"
+  >
+    {lavoroInModifica ? "Aggiorna lavoro" : "Aggiungi lavoro"}
+  </button>
+</div>
 
     </form>
   </section>
 )}
           {(vista === "lavori" || vista === "incassi") && (
   <div className="cards">
+    {vista === "lavori" && (
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "flex-end",
+      marginBottom: "14px",
+    }}
+  >
+    <button
+      type="button"
+      className="primary"
+      onClick={() => {
+        setForm(nuovoLavoroVuoto());
+        setLavoroInModifica(null);
+        setMostraFormLavoro(true);
+
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+      }}
+    >
+      + Nuovo lavoro
+    </button>
+  </div>
+)}
 
 <input
   type="text"
@@ -6905,8 +7411,10 @@ width: "100%",
   onChange={(e) => setRicerca(e.target.value)}
   style={{
     width: "100%",
-    marginBottom: "15px",
-    padding: "10px",
+maxWidth: "650px",
+display: "block",
+margin: "0 auto 15px auto",
+padding: "10px",
   }}
 />
 <div
@@ -6936,10 +7444,10 @@ width: "100%",
      <div
   style={{
     display: "grid",
-    gridTemplateColumns: "190px 170px 110px",
+    gridTemplateColumns: "260px 240px 140px",
     gridTemplateRows: "auto auto",
     alignItems: "center",
-    columnGap: "12px",
+    columnGap: "24px",
     rowGap: "5px",
     minWidth: 0,
     flex: 1,
@@ -7003,14 +7511,15 @@ width: "100%",
   }}
 >
   {euro(
-    Math.max(
-      0,
-      numero(lavoro.costoRicambi) +
-        numero(lavoro.oreManodopera) * numero(lavoro.prezzoOra) +
-        numero(lavoro.altro) -
-        numero(lavoro.acconto)
-    )
-  )}
+  Math.max(
+    0,
+    numero(lavoro.costoRicambi) +
+      numero(lavoro.oreManodopera) * numero(lavoro.prezzoOra) +
+      numero(lavoro.altro) +
+      numero(lavoro.altriCosti) -
+      numero(lavoro.acconto)
+  )
+)}
 </span>
 
 <span
@@ -7026,14 +7535,14 @@ width: "100%",
 
       <div className="actions">
         <button
-          className="actionBtn editBtn"
-          onClick={() => {
-            setForm({ ...lavoro });
-            setLavoroInModifica(lavoro.firebaseId);
-          }}
-        >
-          Modifica
-        </button>
+  className="actionBtn editBtn"
+  onClick={() => {
+    modificaPreventivo(preventivo);
+    setRicerca("");
+  }}
+>
+  Modifica
+</button>
 
         <button
           className="actionBtn pdfBtn"
@@ -7062,7 +7571,7 @@ width: "100%",
 </div>
   </div>
 )}
-          {vista === "preventivi" && (
+          {vista === "preventivi" && mostraFormPreventivo && (
             <section className="panel">
               <h2>{preventivoInModifica ? "Modifica preventivo" : "Nuovo preventivo"}</h2>
               {preventivoInModifica && (
@@ -7084,11 +7593,11 @@ width: "100%",
   const valore = e.target.value;
   setRicercaClientePreventivo(valore);
 
-  const cliente = clientiDb.find((c) =>
-    `${c.cliente || ""} ${c.telefono || ""} ${c.barca || ""} ${c.motore || ""} ${c.matricola || ""}`
-      .toLowerCase()
-      .includes(valore.toLowerCase())
-  );
+  const cliente = clientiDb.find(
+  (c) =>
+    (c.cliente || "").trim().toLowerCase() ===
+    valore.trim().toLowerCase()
+);
 
   if (cliente && valore.trim().length > 1) {
     setFormPreventivo((prev) => ({
@@ -7122,47 +7631,340 @@ width: "100%",
   }}
 >
   <Input
-    label="Cliente *"
-    value={form.cliente || ""}
-    onChange={(v) => setForm({ ...form, cliente: v })}
+  label="Cliente *"
+  value={formPreventivo.cliente || ""}
+  onChange={(v) =>
+    setFormPreventivo((prev) => ({
+      ...prev,
+      cliente: v,
+    }))
+  }
+/>
+
+<Input
+  label="Telefono"
+  value={formPreventivo.telefono || ""}
+  onChange={(v) =>
+    setFormPreventivo((prev) => ({
+      ...prev,
+      telefono: v,
+    }))
+  }
+/>
+</div>
+
+<div className="twoCols">
+  <Input
+  label="Imbarcazione"
+  value={formPreventivo.barca || ""}
+  onChange={(v) =>
+    setFormPreventivo({
+      ...formPreventivo,
+      barca: v,
+    })
+  }
+/>
+
+  <Input
+  label="Motore"
+  value={formPreventivo.motore || ""}
+  onChange={(v) =>
+    setFormPreventivo({
+      ...formPreventivo,
+      motore: v,
+    })
+  }
+/>
+</div>
+
+<Input
+  label="Matricola"
+  value={formPreventivo.matricola || ""}
+  onChange={(v) =>
+    setFormPreventivo({
+      ...formPreventivo,
+      matricola: v,
+    })
+  }
+/>
+<Input
+  label="Titolo preventivo"
+  value={formPreventivo.titolo || ""}
+  onChange={(v) =>
+    setFormPreventivo({
+      ...formPreventivo,
+      titolo: v,
+    })
+  }
+/>
+<Textarea
+  label="Descrizione preventivo *"
+  value={formPreventivo.descrizione || ""}
+  onChange={(v) =>
+    setFormPreventivo({
+      ...formPreventivo,
+      descrizione: v,
+    })
+  }
+/>
+<div
+  style={{
+    border: "1px solid #d1d5db",
+    borderRadius: "10px",
+    padding: "14px",
+    marginBottom: "16px",
+  }}
+>
+  <strong>Ricambi / materiali</strong>
+
+  {(formPreventivo.ricambiDettaglio || []).map((ricambio, index) => (
+    <div
+      key={index}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "2fr 90px 120px 120px 45px",
+        gap: "8px",
+        alignItems: "center",
+        marginTop: "10px",
+      }}
+    >
+      <input
+        type="text"
+        placeholder="Descrizione ricambio"
+        value={ricambio.descrizione || ""}
+        onChange={(e) => {
+          const nuovi = [...(formPreventivo.ricambiDettaglio || [])];
+
+          nuovi[index] = {
+            ...nuovi[index],
+            descrizione: e.target.value,
+          };
+
+          setFormPreventivo({
+            ...formPreventivo,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+      />
+
+      <input
+        type="number"
+        min="1"
+        placeholder="Qtà"
+        value={ricambio.quantita || ""}
+        onWheel={(e) => e.currentTarget.blur()}
+        onChange={(e) => {
+          const nuovi = [...(formPreventivo.ricambiDettaglio || [])];
+
+          nuovi[index] = {
+            ...nuovi[index],
+            quantita: e.target.value,
+          };
+
+          setFormPreventivo({
+            ...formPreventivo,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+      />
+
+      <input
+        type="number"
+        step="0.01"
+        placeholder="Prezzo €"
+        value={ricambio.prezzo || ""}
+        onWheel={(e) => e.currentTarget.blur()}
+        onChange={(e) => {
+          const nuovi = [...(formPreventivo.ricambiDettaglio || [])];
+
+          nuovi[index] = {
+            ...nuovi[index],
+            prezzo: e.target.value,
+          };
+
+          setFormPreventivo({
+            ...formPreventivo,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+      />
+
+      <strong>
+        {euro(
+          numero(ricambio.quantita) *
+            numero(ricambio.prezzo)
+        )}
+      </strong>
+
+      <button
+        type="button"
+        onClick={() => {
+          const nuovi = (formPreventivo.ricambiDettaglio || []).filter(
+            (_, i) => i !== index
+          );
+
+          setFormPreventivo({
+            ...formPreventivo,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+      >
+        🗑
+      </button>
+    </div>
+  ))}
+
+  <button
+    type="button"
+    style={{ marginTop: "12px" }}
+    onClick={() =>
+      setFormPreventivo({
+        ...formPreventivo,
+        ricambiDettaglio: [
+          ...(formPreventivo.ricambiDettaglio || []),
+          {
+            descrizione: "",
+            quantita: 1,
+            prezzo: "",
+          },
+        ],
+      })
+    }
+  >
+    + Aggiungi ricambio
+  </button>
+</div>
+<div className="twoCols">
+  <Input
+    label="Costo ricambi euro"
+    type="number"
+    value={String(
+      (formPreventivo.ricambiDettaglio || []).reduce(
+        (totale, ricambio) =>
+          totale +
+          numero(ricambio.quantita) *
+            numero(ricambio.prezzo),
+        0
+      )
+    )}
+    onChange={() => {}}
+    readOnly
   />
 
   <Input
-    label="Telefono"
-    value={form.telefono || ""}
-    onChange={(v) => setForm({ ...form, telefono: v })}
+    label="Ore manodopera"
+    type="number"
+    value={formPreventivo.oreManodopera || ""}
+    onChange={(v) =>
+      setFormPreventivo({
+        ...formPreventivo,
+        oreManodopera: v,
+      })
+    }
   />
 </div>
 
 <div className="twoCols">
   <Input
-    label="Imbarcazione"
-    value={form.barca || ""}
-    onChange={(v) => setForm({ ...form, barca: v })}
+    label="Costo ora euro"
+    type="number"
+    value={formPreventivo.prezzoOra || ""}
+    onChange={(v) =>
+      setFormPreventivo({
+        ...formPreventivo,
+        prezzoOra: v,
+      })
+    }
   />
-
+<Input
+  label="Rimessaggio euro"
+  type="number"
+  value={formPreventivo.rimessaggio || ""}
+  onChange={(v) =>
+    setFormPreventivo({
+      ...formPreventivo,
+      rimessaggio: v,
+    })
+  }
+/>
   <Input
-    label="Motore"
-    value={form.motore || ""}
-    onChange={(v) => setForm({ ...form, motore: v })}
+    label="Altri costi euro"
+    type="number"
+    value={formPreventivo.altro || ""}
+    onChange={(v) =>
+      setFormPreventivo({
+        ...formPreventivo,
+        altro: v,
+      })
+    }
   />
 </div>
 
-<Input
-  label="Matricola"
-  value={form.matricola || ""}
-  onChange={(v) => setForm({ ...form, matricola: v })}
-/>
+<div className="totalBox">
+  Totale preventivo:{" "}
+  <strong>
+    {euro(
+      (formPreventivo.ricambiDettaglio || []).reduce(
+        (totale, ricambio) =>
+          totale +
+          numero(ricambio.quantita) *
+            numero(ricambio.prezzo),
+        0
+      ) +
+        numero(formPreventivo.oreManodopera) *
+          numero(formPreventivo.prezzoOra) +
+        numero(formPreventivo.rimessaggio) +
+        numero(formPreventivo.altro)
+    )}
+  </strong>
+</div>
 
       <Textarea
-        label="Note"
-        value={formCliente.note}
-        onChange={(v) => setFormCliente({ ...formCliente, note: v })}
-      />
+  label="Note"
+  value={formPreventivo.note || ""}
+  onChange={(v) =>
+    setFormPreventivo({
+      ...formPreventivo,
+      note: v,
+    })
+  }
+/>
 
-      <button className="primary" type="submit">
-  {clienteInModifica ? "Aggiorna cliente" : "Salva cliente"}
-</button>
+      <div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "10px",
+    marginTop: "16px",
+  }}
+>
+  <button
+    type="button"
+    onClick={() => {
+      setFormPreventivo(nuovoPreventivoVuoto());
+      setPreventivoInModifica(null);
+      setMostraFormPreventivo(false);
+    }}
+    style={{
+      padding: "9px 18px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      background: "#ffffff",
+      cursor: "pointer",
+      fontWeight: "600",
+      color: "#475569",
+    }}
+  >
+    Annulla
+  </button>
+
+  <button
+    className="primary"
+    type="submit"
+  >
+    {preventivoInModifica ? "Aggiorna preventivo" : "Salva preventivo"}
+  </button>
+</div>
     </form>
   </section>
 )}
@@ -7186,13 +7988,18 @@ width: "100%",
     className="primary"
     onClick={() => {
   setFormCliente({
-    cliente: "",
-    telefono: "",
-    barca: "",
-    motore: "",
-    matricola: "",
-    note: "",
-  });
+  cliente: "",
+  telefono: "",
+  indirizzo: "",
+  cap: "",
+  citta: "",
+  provincia: "",
+  codiceFiscale: "",
+  barca: "",
+  motore: "",
+  matricola: "",
+  note: "",
+});
   setClienteInModifica(null);
   setMostraFormCliente(true);
 }}
@@ -7291,7 +8098,92 @@ width: "100%",
         }
       />
     </div>
+{/* Residenza e dati fiscali */}
+<div
+  style={{
+    marginBottom: "8px",
+    fontSize: "13px",
+    fontWeight: "800",
+    color: "#2563eb",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  }}
+>
+  Residenza e dati fiscali
+</div>
 
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "2fr 100px 1.3fr 90px",
+    gap: "14px",
+    marginBottom: "16px",
+  }}
+>
+  <Input
+    label="Indirizzo di residenza"
+    value={formCliente.indirizzo || ""}
+    onChange={(v) =>
+      setFormCliente({
+        ...formCliente,
+        indirizzo: v,
+      })
+    }
+  />
+
+  <Input
+    label="CAP"
+    value={formCliente.cap || ""}
+    onChange={(v) =>
+      setFormCliente({
+        ...formCliente,
+        cap: v,
+      })
+    }
+  />
+
+  <Input
+    label="Città"
+    value={formCliente.citta || ""}
+    onChange={(v) =>
+      setFormCliente({
+        ...formCliente,
+        citta: v,
+      })
+    }
+  />
+
+  <Input
+    label="Provincia"
+    value={formCliente.provincia || ""}
+    onChange={(v) =>
+      setFormCliente({
+        ...formCliente,
+        provincia: v.toUpperCase(),
+      })
+    }
+  />
+</div>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "320px 1fr",
+    gap: "14px",
+    marginBottom: "20px",
+  }}
+>
+  <Input
+    label="Codice fiscale"
+    value={formCliente.codiceFiscale || ""}
+    onChange={(v) =>
+      setFormCliente({
+        ...formCliente,
+        codiceFiscale: v.toUpperCase(),
+      })
+    }
+  />
+</div>
     {/* Dati imbarcazione */}
     <div
       style={{
@@ -7378,37 +8270,48 @@ width: "100%",
   </form>
 )}
 
-    <input
-      type="text"
-      placeholder="Cerca cliente, telefono, barca, motore o matricola..."
-      value={ricerca}
-      onChange={(e) => setRicerca(e.target.value)}
-      style={{
-        width: "100%",
-        marginBottom: "15px",
-        padding: "10px",
-      }}
-    />
-<button
-  type="button"
-  onClick={() =>
-    setOrdinaClientiPerSaldo(!ordinaClientiPerSaldo)
-  }
+    <div
   style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "12px",
     marginBottom: "15px",
-    padding: "10px 14px",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "700",
-    background: ordinaClientiPerSaldo ? "#dbeafe" : "#f1f5f9",
-    color: ordinaClientiPerSaldo ? "#1d4ed8" : "#334155",
   }}
 >
-  {ordinaClientiPerSaldo
-    ? "Ordine normale"
-    : "Ordina per saldo"}
-</button>
+  <input
+    type="text"
+    placeholder="Cerca cliente, telefono, barca, motore o matricola..."
+    value={ricerca}
+    onChange={(e) => setRicerca(e.target.value)}
+    style={{
+      width: "100%",
+      maxWidth: "650px",
+      padding: "10px",
+    }}
+  />
+
+  <button
+    type="button"
+    onClick={() =>
+      setOrdinaClientiPerSaldo(!ordinaClientiPerSaldo)
+    }
+    style={{
+      padding: "10px 14px",
+      border: "none",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontWeight: "700",
+      whiteSpace: "nowrap",
+      background: ordinaClientiPerSaldo ? "#dbeafe" : "#f1f5f9",
+      color: ordinaClientiPerSaldo ? "#1d4ed8" : "#334155",
+    }}
+  >
+    {ordinaClientiPerSaldo
+      ? "Ordine normale"
+      : "Ordina per saldo"}
+  </button>
+</div>
     {clientiOrdinati.map((cliente) => {
       const lavoriCliente = lavori.filter(
         (lavoro) => lavoro.cliente === cliente.cliente
@@ -7472,18 +8375,8 @@ const saldoTotaleCliente =
     }}
   >
     <div>
-      <strong
-  style={{
-    display: "block",
-    textAlign: "left",
-    marginBottom: "8px",
-    fontSize: "18px",
-  }}
->
-  {cliente.cliente}
-</strong>
-
-      <div
+      
+            <div
         style={{
           fontSize: "13px",
           color: "#666",
@@ -7493,24 +8386,65 @@ const saldoTotaleCliente =
         <div
   style={{
     display: "grid",
-    gridTemplateColumns: "320px 220px",
-    gap: "8px 28px",
-    marginTop: "8px",
-    fontSize: "13px",
-    color: "#666",
-    alignItems: "center",
+  gridTemplateColumns: "260px 420px 360px",
+  gap: "8px 28px",
+  marginTop: "8px",
+  fontSize: "13px",
+  color: "#666",
+  alignItems: "center",
+  justifyItems: "start",
+  textAlign: "left",
   }}
 >
-  <div>
-    Barca / Motore:{" "}
-    <strong>
-      {cliente.barca || "-"} | {cliente.motore || "-"}
-    </strong>
-  </div>
+ <div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  }}
+>
+  <strong
+    style={{
+      fontSize: "18px",
+      color: "#0f172a",
+      whiteSpace: "nowrap",
+    }}
+  >
+    {cliente.cliente}
+  </strong>
 
-  <div>
-    Saldo lavori: <strong>{euro(saldoLavoriCliente)}</strong>
-  </div>
+  <span
+    title={
+      saldoTotaleCliente > 0
+        ? "Da incassare"
+        : "In regola"
+    }
+    style={{
+      width: "10px",
+      height: "10px",
+      borderRadius: "50%",
+      display: "inline-block",
+      background:
+        saldoTotaleCliente > 0
+          ? "#dc2626"
+          : "#16a34a",
+      flexShrink: 0,
+    }}
+  />
+</div>
+
+  <div
+  style={{
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  }}
+>
+  Barca / Motore:{" "}
+  <strong>
+    {cliente.barca || "-"} | {cliente.motore || "-"}
+  </strong>
+</div>
 
   <div>
     Lavori: <strong>{lavoriCliente.length}</strong> | Preventivi:{" "}
@@ -7518,32 +8452,6 @@ const saldoTotaleCliente =
     <strong>{rimessaggiCliente.length}</strong>
   </div>
 
-  <div>
-    Saldo rimessaggi: <strong>{euro(saldoRimessaggiCliente)}</strong>
-  </div>
-
-  <div>
-    Stato:
-    <span
-      style={{
-        marginLeft: "8px",
-        padding: "3px 8px",
-        borderRadius: "999px",
-        fontSize: "11px",
-        fontWeight: "700",
-        background:
-          saldoTotaleCliente > 0 ? "#fee2e2" : "#dcfce7",
-        color:
-          saldoTotaleCliente > 0 ? "#dc2626" : "#15803d",
-      }}
-    >
-      {saldoTotaleCliente > 0 ? "DA INCASSARE" : "IN REGOLA"}
-    </span>
-  </div>
-
-  <div>
-    Saldo totale: <strong>{euro(saldoTotaleCliente)}</strong>
-  </div>
 </div>
 </div>
 </div>
@@ -7556,61 +8464,27 @@ const saldoTotaleCliente =
     background: "#0f172a",
     color: "white",
   }}
-  onClick={() =>
-    setClienteAperto(
-      clienteAperto === cliente.firebaseId
-        ? null
-        : cliente.firebaseId
-    )
-  }
+  onClick={() => {
+  setClienteAperto(
+    clienteAperto === cliente.firebaseId
+      ? null
+      : cliente.firebaseId
+  );
+
+  setRicerca("");
+}}
 >
   📂 Storico
 </button>
       <button
   className="clientBtn editBtn"
-  onClick={() => modificaCliente(cliente)}
+  onClick={() => {
+    modificaCliente(cliente);
+    setRicerca("");
+  }}
 >
   Modifica
 </button>
-
-      <button
-        type="button"
-        className="clientBtn preventivoBtn"
-        onClick={() => {
-          setVista("preventivi");
-
-          setFormPreventivo({
-            ...nuovoPreventivoVuoto(),
-            cliente: cliente.cliente || "",
-            telefono: cliente.telefono || "",
-            barca: cliente.barca || "",
-            motore: cliente.motore || "",
-            matricola: cliente.matricola || "",
-          });
-        }}
-      >
-        Preventivo
-      </button>
-
-      <button
-        type="button"
-        className="clientBtn lavoroBtn"
-        onClick={() => {
-          setVista("lavori");
-
-          setForm({
-            ...nuovoLavoroVuoto(),
-            cliente: cliente.cliente || "",
-            telefono: cliente.telefono || "",
-            barca: cliente.barca || "",
-            motore: cliente.motore || "",
-            matricola: cliente.matricola || "",
-          });
-        }}
-      >
-        Lavoro
-          
-      </button>
 
       <button
         type="button"
@@ -7649,11 +8523,17 @@ const saldoTotaleCliente =
             <button
   type="button"
   onClick={() => {
-    setVista("lavori");
-    setForm({ ...lavoro });
-    setLavoroInModifica(lavoro.firebaseId);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }}
+    setClienteOrigineScheda(cliente.firebaseId);
+  setVista("lavori");
+  setForm({ ...lavoro });
+  setLavoroInModifica(lavoro.firebaseId);
+  setMostraFormLavoro(true);
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
+}}
   style={{
     border: "none",
     background: "transparent",
@@ -7669,6 +8549,14 @@ const saldoTotaleCliente =
 {" — "}
 {formatData(lavoro.ingresso)} —{" "}
 <strong>{lavoro.titolo || "Senza titolo"}</strong>
+{" — "}
+<strong>
+  {euro(
+    numero(lavoro.costoRicambi) +
+      numero(lavoro.oreManodopera) * numero(lavoro.prezzoOra) +
+      numero(lavoro.altro)
+  )}
+</strong>
 {" — "}
 {lavoro.pagamento || "Non pagato"}
           </div>
@@ -7730,10 +8618,17 @@ const saldoTotaleCliente =
             <button
   type="button"
   onClick={() => {
+    setClienteOrigineScheda(cliente.firebaseId);
   setVista("rimessaggi");
   setForm({ ...rimessaggio });
   setRimessaggioInModifica(rimessaggio.firebaseId);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  setMostraFormRimessaggio(true);
+  setRicerca("");
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
 }}
   style={{
     border: "none",
@@ -7748,11 +8643,16 @@ const saldoTotaleCliente =
   {rimessaggio.id || "-"}
 </button>
 {" — "}
-{formatData(rimessaggio.ingresso)}
+{formatData(rimessaggio.ingresso)} —{" "}
+<strong>{rimessaggio.barca || "-"}</strong>
 {" — "}
-{rimessaggio.barca || "Imbarcazione"}
+<strong>
+  {euro(
+    numero(rimessaggio.prezzoRimessaggio)
+  )}
+</strong>
 {" — "}
-<strong>{rimessaggio.pagamento || "Da pagare"}</strong>
+{rimessaggio.pagamento || "Da pagare"}
           </div>
         ))
       )}
@@ -7764,7 +8664,7 @@ const saldoTotaleCliente =
     })}
   </div>
 )}
-{vista === "rimessaggi" && (
+{vista === "rimessaggi" && mostraFormRimessaggio && (
   <section className="panel">
     <h2>Nuovo rimessaggio</h2>
 
@@ -7840,6 +8740,113 @@ const saldoTotaleCliente =
           onChange={(v) => setForm({ ...form, uscita: v })}
         />
       </div>
+      <Select
+  label="Stato barca"
+  value={form.statoBarca || "Da recuperare"}
+  options={[
+    "Da recuperare",
+    "In cantiere",
+    "Consegnata",
+  ]}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      statoBarca: v,
+    })
+  }
+/>
+
+{(form.statoBarca || "Da recuperare") === "Da recuperare" && (
+  <div className="twoCols">
+    <Input
+      label="Data ritiro prevista"
+      type="date"
+      value={form.dataRitiro || ""}
+      onChange={(v) =>
+        setForm({
+          ...form,
+          dataRitiro: v,
+        })
+      }
+    />
+
+    <Input
+      label="Luogo ritiro"
+      value={form.luogoRitiro || ""}
+      onChange={(v) =>
+        setForm({
+          ...form,
+          luogoRitiro: v,
+        })
+      }
+    />
+  </div>
+)}
+<Select
+  label="Carrello"
+  value={form.carrello || "No"}
+  options={[
+    "No",
+    "Sì",
+  ]}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      carrello: v,
+      targaCarrello: v === "No" ? "" : form.targaCarrello || "",
+    })
+  }
+/>
+
+{(form.carrello || "No") === "Sì" && (
+  <Input
+    label="Targa carrello"
+    value={form.targaCarrello || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        targaCarrello: v.toUpperCase(),
+      })
+    }
+  />
+)}
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "14px",
+  }}
+>
+  <Select
+    label="Chiavi"
+    value={form.chiavi || "No"}
+    options={[
+      "No",
+      "Sì",
+    ]}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        chiavi: v,
+      })
+    }
+  />
+
+  <Select
+    label="Cuscini"
+    value={form.cuscini || "No"}
+    options={[
+      "No",
+      "Sì",
+    ]}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        cuscini: v,
+      })
+    }
+  />
+</div>
 <Select
   label="Copertura"
   value={form.copertura || ""}
@@ -7900,13 +8907,48 @@ const saldoTotaleCliente =
   }
 />
 
-      <button
-  className="primary"
-  type="button"
-  onClick={salvaRimessaggio}
+      <div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "10px",
+    marginTop: "16px",
+  }}
 >
-  Salva rimessaggio
-</button>
+  <button
+    type="button"
+    onClick={() => {
+  setForm(nuovoLavoroVuoto());
+  setRimessaggioInModifica(null);
+  setMostraFormRimessaggio(false);
+
+  if (clienteOrigineScheda) {
+    setVista("clienti");
+    setClienteAperto(clienteOrigineScheda);
+    setClienteOrigineScheda(null);
+  }
+}}
+    style={{
+      padding: "9px 18px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      background: "#ffffff",
+      cursor: "pointer",
+      fontWeight: "600",
+      color: "#475569",
+    }}
+  >
+    Annulla
+  </button>
+
+  <button
+    className="primary"
+    type="button"
+    onClick={salvaRimessaggio}
+  >
+    Salva rimessaggio
+  </button>
+</div>
 
     </form>
   </section>
@@ -7944,9 +8986,9 @@ const saldoTotaleCliente =
       <div
   style={{
     display: "grid",
-    gridTemplateColumns: "180px 95px 95px 135px",
+    gridTemplateColumns: "220px 150px 110px 110px 155px 135px",
     alignItems: "center",
-    columnGap: "8px",
+    columnGap: "18px",
     minWidth: 0,
     flex: 1,
   }}
@@ -7959,7 +9001,31 @@ const saldoTotaleCliente =
         >
           {rimessaggio.cliente}
         </strong>
-
+<span
+  style={{
+    display: "inline-block",
+    padding: "4px 8px",
+    borderRadius: "999px",
+    fontSize: "11px",
+    fontWeight: "800",
+    textAlign: "center",
+    whiteSpace: "nowrap",
+    background:
+      (rimessaggio.statoBarca || "Da recuperare") === "Da recuperare"
+        ? "#fee2e2"
+        : rimessaggio.statoBarca === "In cantiere"
+        ? "#dcfce7"
+        : "#e2e8f0",
+    color:
+      (rimessaggio.statoBarca || "Da recuperare") === "Da recuperare"
+        ? "#dc2626"
+        : rimessaggio.statoBarca === "In cantiere"
+        ? "#15803d"
+        : "#475569",
+  }}
+>
+  {rimessaggio.statoBarca || "Da recuperare"}
+</span>
         <span
           style={{
             fontSize: "13px",
@@ -8000,20 +9066,56 @@ const saldoTotaleCliente =
     whiteSpace: "nowrap",
   }}
 >
-          Uscita: {formatData(rimessaggio.uscita)}
-        </span>
-      </div>
+  Ingresso: {formatData(rimessaggio.ingresso)}
+</span>
 
+<span
+  style={{
+    fontSize: "13px",
+    color: "#666",
+    whiteSpace: "nowrap",
+    paddingLeft: "22px",
+  }}
+>
+  Uscita: {formatData(rimessaggio.uscita)}
+</span>
+      </div>
+{(rimessaggio.statoBarca || "Da recuperare") === "Da recuperare" && (
+  <div
+    style={{
+      marginTop: "6px",
+      fontSize: "12px",
+      color: "#64748b",
+      paddingLeft: "4px",
+    }}
+  >
+    Ritiro previsto:{" "}
+    <strong>
+      {rimessaggio.dataRitiro
+        ? formatData(rimessaggio.dataRitiro)
+        : "Data non indicata"}
+    </strong>
+
+    {" — "}
+
+    Luogo:{" "}
+    <strong>
+      {rimessaggio.luogoRitiro || "Non indicato"}
+    </strong>
+  </div>
+)}
       <div className="actions">
         <button
-          className="actionBtn editBtn"
-          onClick={() => {
-            setForm({ ...rimessaggio });
-            setRimessaggioInModifica(rimessaggio.firebaseId);
-          }}
-        >
-          Modifica
-        </button>
+  className="actionBtn editBtn"
+  onClick={() => {
+    setForm({ ...rimessaggio });
+    setRimessaggioInModifica(rimessaggio.firebaseId);
+    setMostraFormRimessaggio(true);
+    setRicerca("");
+  }}
+>
+  Modifica
+</button>
 
         <button
           className="actionBtn pdfBtn"
@@ -8049,6 +9151,30 @@ const saldoTotaleCliente =
 )}
 {vista === "preventivi" && (
               <div className="cards">
+                <div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    marginBottom: "14px",
+  }}
+>
+  <button
+    type="button"
+    className="primary"
+    onClick={() => {
+      setFormPreventivo(nuovoPreventivoVuoto());
+      setPreventivoInModifica(null);
+      setMostraFormPreventivo(true);
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    }}
+  >
+    + Nuovo preventivo
+  </button>
+</div>
                 <input
   type="text"
   placeholder="Cerca cliente, preventivo, barca, motore o matricola..."
@@ -8056,19 +9182,29 @@ const saldoTotaleCliente =
   onChange={(e) => setRicerca(e.target.value)}
   style={{
     width: "100%",
-    marginBottom: "15px",
-    padding: "10px",
+maxWidth: "650px",
+display: "block",
+margin: "0 auto 15px auto",
+padding: "10px",
   }}
 />
                 {preventiviFiltrati.map((preventivo) => (
                   <article className="job preventivo" key={preventivo.firebaseId || preventivo.id}>
-                    <div className="jobTop">
+                    <div
+  className="jobTop"
+  style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "20px",
+  }}
+>
   <div
     style={{
       display: "grid",
-      gridTemplateColumns: "180px 140px 135px",
+      gridTemplateColumns: "260px 260px 150px",
       alignItems: "center",
-      gap: "8px",
+      gap: "20px",
       minWidth: 0,
       flex: 1,
     }}
@@ -8106,7 +9242,14 @@ const saldoTotaleCliente =
     </span>
   </div>
 
-  <div className="actions">
+  <div
+  className="actions"
+  style={{
+    display: "flex",
+    gap: "8px",
+    flexShrink: 0,
+  }}
+>
     <button
       className="actionBtn editBtn"
       onClick={() => modificaPreventivo(preventivo)}
@@ -8502,7 +9645,10 @@ function LavoroStampabile({ lavoro }) {
       <span>Rimessaggio</span>
       <strong>{euro(numero(lavoro.altro))}</strong>
     </div>
-
+<div>
+  <span>Altri costi</span>
+  <strong>{euro(numero(lavoro.altriCosti))}</strong>
+</div>
     <div
   className="total"
   style={{
@@ -8745,7 +9891,28 @@ function RimessaggioStampabile({ rimessaggio }) {
           <strong>Uscita:</strong>{" "}
           {formatData(rimessaggio.uscita)}
         </p>
+{rimessaggio.carrello === "Sì" && (
+  <>
+    <p>
+      <strong>Carrello:</strong>{" "}
+      Sì
+    </p>
 
+    <p>
+      <strong>Targa carrello:</strong>{" "}
+      {rimessaggio.targaCarrello || "-"}
+    </p>
+  </>
+)}
+<p>
+  <strong>Chiavi:</strong>{" "}
+  {rimessaggio.chiavi || "No"}
+</p>
+
+<p>
+  <strong>Cuscini:</strong>{" "}
+  {rimessaggio.cuscini || "No"}
+</p>
         <p>
           <strong>Copertura:</strong>{" "}
           {rimessaggio.copertura || "-"}
@@ -8931,13 +10098,28 @@ function numero(valore) {
 }
 
 function calcolaTotale(preventivo) {
+  const ricambi = (preventivo.ricambiDettaglio || []).reduce(
+    (totale, ricambio) =>
+      totale +
+      numero(ricambio.quantita) *
+        numero(ricambio.prezzo),
+    0
+  );
+
   const manodopera =
     numero(preventivo.oreManodopera) *
     numero(preventivo.prezzoOra);
 
-  const altro = numero(preventivo.altro);
+  const rimessaggio = numero(preventivo.rimessaggio);
 
-  return manodopera + altro;
+  const altriCosti = numero(preventivo.altro);
+
+  return (
+    ricambi +
+    manodopera +
+    rimessaggio +
+    altriCosti
+  );
 }
 
 function euro(valore) {
