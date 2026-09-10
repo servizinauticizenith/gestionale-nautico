@@ -2266,27 +2266,7 @@ function creaBackupDati() {
     rimessaggi: rimessaggi,
     allievi: allievi,
   };
-  async function ripristinaBackupDati(backup) {
-  const ripristinaRaccolta = async (nomeRaccolta, dati) => {
-    for (const elemento of dati || []) {
-      if (!elemento.firebaseId) continue;
-
-      const { firebaseId, ...datiDocumento } = elemento;
-
-      await setDoc(
-        doc(db, nomeRaccolta, firebaseId),
-        datiDocumento,
-        { merge: true }
-      );
-    }
-  };
-
-  await ripristinaRaccolta("clienti", backup.clienti);
-  await ripristinaRaccolta("lavori", backup.lavori);
-  await ripristinaRaccolta("preventivi", backup.preventivi);
-  await ripristinaRaccolta("rimessaggi", backup.rimessaggi);
-  await ripristinaRaccolta("allievi", backup.allievi);
-}
+  
 
   const contenuto = JSON.stringify(backup, null, 2);
 
@@ -2310,6 +2290,27 @@ function creaBackupDati() {
   link.remove();
 
   URL.revokeObjectURL(url);
+}
+async function ripristinaBackupDati(backup) {
+  const ripristinaRaccolta = async (nomeRaccolta, dati) => {
+    for (const elemento of dati || []) {
+      if (!elemento.firebaseId) continue;
+
+      const { firebaseId, ...datiDocumento } = elemento;
+
+      await setDoc(
+        doc(db, nomeRaccolta, firebaseId),
+        datiDocumento,
+        { merge: true }
+      );
+    }
+  };
+
+  await ripristinaRaccolta("clienti", backup.clienti);
+  await ripristinaRaccolta("lavori", backup.lavori);
+  await ripristinaRaccolta("preventivi", backup.preventivi);
+  await ripristinaRaccolta("rimessaggi", backup.rimessaggi);
+  await ripristinaRaccolta("allievi", backup.allievi);
 }
 async function salvaRimessaggio() {
   if (!form.cliente?.trim()) {
