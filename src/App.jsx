@@ -10,6 +10,7 @@ import {
   onSnapshot,
   updateDoc,
   runTransaction,
+  getDocs,
   setDoc,
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
@@ -2257,14 +2258,33 @@ async function generaNumeroPreventivo() {
 
   return `LAV-${anno}-${String(numeroProgressivo).padStart(4, "0")}`;
 }
-function creaBackupDati() {
+async function creaBackupDati() {
+  const leggiRaccolta = async (nomeRaccolta) => {
+    const snapshot = await getDocs(
+      collection(db, nomeRaccolta)
+    );
+
+    return snapshot.docs.map((docSnap) => ({
+      firebaseId: docSnap.id,
+      ...docSnap.data(),
+    }));
+  };
+
+  const clientiBackup = await leggiRaccolta("clienti");
+  const lavoriBackup = await leggiRaccolta("lavori");
+  const preventiviBackup = await leggiRaccolta("preventivi");
+  const rimessaggiBackup = await leggiRaccolta("rimessaggi");
+  const allieviBackup = await leggiRaccolta("allievi");
+  const contatoriBackup = await leggiRaccolta("contatori");
+
   const backup = {
     dataBackup: new Date().toISOString(),
-    clienti: clientiDb,
-    lavori: lavori,
-    preventivi: preventivi,
-    rimessaggi: rimessaggi,
-    allievi: allievi,
+    clienti: clientiBackup,
+    lavori: lavoriBackup,
+    preventivi: preventiviBackup,
+    rimessaggi: rimessaggiBackup,
+    allievi: allieviBackup,
+    contatori: contatoriBackup,
   };
   
 
@@ -2311,6 +2331,7 @@ async function ripristinaBackupDati(backup) {
   await ripristinaRaccolta("preventivi", backup.preventivi);
   await ripristinaRaccolta("rimessaggi", backup.rimessaggi);
   await ripristinaRaccolta("allievi", backup.allievi);
+  await ripristinaRaccolta("contatori", backup.contatori);
 }
 async function salvaRimessaggio() {
   if (!form.cliente?.trim()) {
@@ -3626,7 +3647,7 @@ if (ordinaClientiPerSaldo) {
     width: "calc(100% - 240px)",
   }}
 >
-{sezione === "cantiere" && (
+{sezione === "cantiere" && vista === "dashboard" && (
   <div
     style={{
       display: "flex",
@@ -3731,6 +3752,7 @@ if (ordinaClientiPerSaldo) {
   !Array.isArray(backup.preventivi) ||
   !Array.isArray(backup.rimessaggi) ||
   !Array.isArray(backup.allievi)
+  || !Array.isArray(backup.contatori)
 ) {
   alert("Il file selezionato non contiene un backup valido del gestionale.");
   return;
@@ -3746,7 +3768,8 @@ const riepilogo =
   `Lavori: ${backup.lavori?.length || 0}\n` +
   `Preventivi: ${backup.preventivi?.length || 0}\n` +
   `Rimessaggi: ${backup.rimessaggi?.length || 0}\n` +
-  `Allievi: ${backup.allievi?.length || 0}`;
+  `Allievi: ${backup.allievi?.length || 0}\n` +
+  `Contatori: ${backup.contatori?.length || 0}`;
 
     const conferma = confirm(
       `Backup valido.\n\n${riepilogo}\n\n` +
@@ -4001,31 +4024,7 @@ reader.readAsText(file);
   </>
 )}
 )}
-{sezione === "scuola" && (
-  <div
-    className="sidebarSearch"
-    style={{
-      position: "relative",
-      zIndex: 50,
-      width: "100%",
-      marginTop: "12px",
-    }}
-  >
-    <input
-      type="text"
-      placeholder="Cerca allievo: nome, cognome, codice fiscale, cellulare..."
-      value={ricercaAllievi}
-      onChange={(e) => setRicercaAllievi(e.target.value)}
-      style={{
-        width: "100%",
-        padding: "12px 14px",
-        border: "1px solid #cbd5e1",
-        borderRadius: "10px",
-        fontSize: "14px",
-      }}
-    />
-  </div>
-)}
+
 
  <div
   className="sidebarSearch"
@@ -4033,7 +4032,7 @@ reader.readAsText(file);
   position: "relative",
   zIndex: 50,
   width: "100%",
-  display: sezione === "cantiere" ? "block" : "none",
+  display: "none",
 }}
 >
   <input
