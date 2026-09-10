@@ -10,6 +10,7 @@ import {
   onSnapshot,
   updateDoc,
   runTransaction,
+  setDoc,
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "./firebase";
@@ -2256,6 +2257,60 @@ async function generaNumeroPreventivo() {
 
   return `LAV-${anno}-${String(numeroProgressivo).padStart(4, "0")}`;
 }
+function creaBackupDati() {
+  const backup = {
+    dataBackup: new Date().toISOString(),
+    clienti: clientiDb,
+    lavori: lavori,
+    preventivi: preventivi,
+    rimessaggi: rimessaggi,
+    allievi: allievi,
+  };
+  async function ripristinaBackupDati(backup) {
+  const ripristinaRaccolta = async (nomeRaccolta, dati) => {
+    for (const elemento of dati || []) {
+      if (!elemento.firebaseId) continue;
+
+      const { firebaseId, ...datiDocumento } = elemento;
+
+      await setDoc(
+        doc(db, nomeRaccolta, firebaseId),
+        datiDocumento,
+        { merge: true }
+      );
+    }
+  };
+
+  await ripristinaRaccolta("clienti", backup.clienti);
+  await ripristinaRaccolta("lavori", backup.lavori);
+  await ripristinaRaccolta("preventivi", backup.preventivi);
+  await ripristinaRaccolta("rimessaggi", backup.rimessaggi);
+  await ripristinaRaccolta("allievi", backup.allievi);
+}
+
+  const contenuto = JSON.stringify(backup, null, 2);
+
+  const blob = new Blob([contenuto], {
+    type: "application/json",
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+
+  const data = new Date()
+    .toISOString()
+    .slice(0, 10);
+
+  link.download = `backup-gestionale-${data}.json`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+}
 async function salvaRimessaggio() {
   if (!form.cliente?.trim()) {
     alert("Inserisci il cliente.");
@@ -3570,6 +3625,154 @@ if (ordinaClientiPerSaldo) {
     width: "calc(100% - 240px)",
   }}
 >
+{sezione === "cantiere" && (
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: "18px",
+    }}
+  >
+    <div
+      style={{
+        width: "100%",
+        maxWidth: "620px",
+        background: "#ffffff",
+        border: "1px solid #dbe3ec",
+        borderRadius: "14px",
+        padding: "18px 22px",
+        boxShadow: "0 4px 14px rgba(15, 23, 42, 0.06)",
+      }}
+    >
+      <div
+        style={{
+          textAlign: "center",
+          marginBottom: "14px",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "18px",
+            fontWeight: "800",
+            color: "#0f172a",
+          }}
+        >
+          🛡️ Sicurezza dati
+        </div>
+
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#64748b",
+          }}
+        >
+          Gestisci il backup e il ripristino dei dati del gestionale.
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "12px",
+        }}
+      >
+        <button
+          type="button"
+          onClick={creaBackupDati}
+          style={{
+            padding: "12px 16px",
+            border: "none",
+            borderRadius: "10px",
+            background: "#16a34a",
+            color: "#ffffff",
+            fontWeight: "700",
+            cursor: "pointer",
+          }}
+        >
+          🛡️ Crea backup
+        </button>
+
+        <label
+  style={{
+    padding: "12px 16px",
+    borderRadius: "10px",
+    background: "#2563eb",
+    color: "#ffffff",
+    fontWeight: "700",
+    cursor: "pointer",
+    textAlign: "center",
+  }}
+>
+  ♻️ Ripristina dati
+
+  <input
+    type="file"
+    accept=".json,application/json"
+    style={{
+      display: "none",
+    }}
+    onChange={(e) => {
+  const file = e.target.files?.[0];
+
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = async () => {
+  try {
+    const backup = JSON.parse(reader.result);
+    if (
+  !backup ||
+  !Array.isArray(backup.clienti) ||
+  !Array.isArray(backup.lavori) ||
+  !Array.isArray(backup.preventivi) ||
+  !Array.isArray(backup.rimessaggi) ||
+  !Array.isArray(backup.allievi)
+) {
+  alert("Il file selezionato non contiene un backup valido del gestionale.");
+  return;
+}
+
+    const dataBackup = backup.dataBackup
+  ? new Date(backup.dataBackup).toLocaleString("it-IT")
+  : "Data non disponibile";
+
+const riepilogo =
+  `Data backup: ${dataBackup}\n\n` +
+  `Clienti: ${backup.clienti?.length || 0}\n` +
+  `Lavori: ${backup.lavori?.length || 0}\n` +
+  `Preventivi: ${backup.preventivi?.length || 0}\n` +
+  `Rimessaggi: ${backup.rimessaggi?.length || 0}\n` +
+  `Allievi: ${backup.allievi?.length || 0}`;
+
+    const conferma = confirm(
+      `Backup valido.\n\n${riepilogo}\n\n` +
+      `Vuoi ripristinare questi dati su Firebase?`
+    );
+
+    if (!conferma) return;
+
+    await ripristinaBackupDati(backup);
+
+    alert("Ripristino completato correttamente.");
+  } catch (errore) {
+    console.error("Errore ripristino backup:", errore);
+    alert("Errore durante il ripristino del backup.");
+  }
+};
+
+reader.readAsText(file);
+
+  e.target.value = "";
+}}
+  />
+</label>
+      </div>
+    </div>
+  </div>
+)}
         <header className="header">
   <div>
     <h1>
