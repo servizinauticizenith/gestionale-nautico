@@ -7578,7 +7578,10 @@ width: "100%",
     </form>
   </section>
 )}
-          {(vista === "lavori" || vista === "incassi") && (
+          {(
+  vista === "incassi" ||
+  (vista === "lavori" && !mostraFormLavoro)
+) && (
   <div className="cards">
     {vista === "lavori" && (
   <div
@@ -7737,11 +7740,18 @@ padding: "10px",
       </div>
 
       <div className="actions">
-        <button
+       <button
   className="actionBtn editBtn"
   onClick={() => {
-    modificaPreventivo(preventivo);
+    setForm({ ...lavoro });
+    setLavoroInModifica(lavoro.firebaseId);
+    setMostraFormLavoro(true);
     setRicerca("");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   }}
 >
   Modifica
@@ -9156,7 +9166,7 @@ const saldoTotaleCliente =
     </form>
   </section>
 )}
-{vista === "rimessaggi" && (
+{vista === "rimessaggi" && !mostraFormRimessaggio && (
 <>
   
 
@@ -9321,18 +9331,24 @@ const saldoTotaleCliente =
 </button>
 
         <button
-          className="actionBtn pdfBtn"
-          onClick={() => {
-            setLavoroDaStampare(null);
-            setRimessaggioDaStampare(rimessaggio);
+  className="actionBtn pdfBtn"
+  onClick={() => {
+    setLavoroDaStampare(null);
+    setPreventivoDaStampare(null);
+    setStampaElencoLavori(false);
+    setStampaElencoRimessaggi(false);
 
-            setTimeout(() => {
-              window.print();
-            }, 300);
-          }}
-        >
-          PDF
-        </button>
+    setRimessaggioDaStampare(rimessaggio);
+
+    setTimeout(() => {
+      window.print();
+
+      setRimessaggioDaStampare(null);
+    }, 300);
+  }}
+>
+  PDF
+</button>
 
         <button
           type="button"
@@ -9352,7 +9368,7 @@ const saldoTotaleCliente =
   </div>
   </>
 )}
-{vista === "preventivi" && (
+{vista === "preventivi" && !mostraFormPreventivo && (
               <div className="cards">
                 <div
   style={{
