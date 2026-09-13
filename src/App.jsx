@@ -50,6 +50,7 @@ function nuovoLavoroVuoto() {
 altriCosti: "",
     acconto: "",
     pagamento: "Non pagato",   // ← AGGIUNGI QUESTA RIGA
+    archiviato: false,
     note: "",
   };
 }
@@ -2439,7 +2440,28 @@ setMostraFormPreventivo(false);
       [campo]: valore,
     });
   }
+async function archiviaLavoro(lavoro) {
+  const conferma = window.confirm(
+    `Vuoi archiviare il lavoro ${lavoro.id || ""} di ${lavoro.cliente || ""}?`
+  );
 
+  if (!conferma) return;
+
+  try {
+    await updateDoc(
+      doc(db, "lavori", lavoro.firebaseId),
+      {
+        archiviato: true,
+        archiviatoIl: new Date().toISOString(),
+      }
+    );
+
+    alert("Lavoro archiviato");
+  } catch (errore) {
+    console.error("Errore archiviazione lavoro:", errore);
+    alert("Errore durante l'archiviazione del lavoro.");
+  }
+}
   async function eliminaLavoro(firebaseId) {
   const conferma = window.confirm(
     "Vuoi eliminare questo lavoro?"
@@ -2481,7 +2503,28 @@ async function eliminaCliente(firebaseId) {
     alert("Errore eliminazione cliente: " + errore.message);
   }
 }
+async function archiviaRimessaggio(rimessaggio) {
+  const conferma = window.confirm(
+    `Vuoi archiviare il rimessaggio ${rimessaggio.id || ""} di ${rimessaggio.cliente || ""}?`
+  );
 
+  if (!conferma) return;
+
+  try {
+    await updateDoc(
+      doc(db, "rimessaggi", rimessaggio.firebaseId),
+      {
+        archiviato: true,
+        archiviatoIl: new Date().toISOString(),
+      }
+    );
+
+    alert("Rimessaggio archiviato");
+  } catch (errore) {
+    console.error("Errore archiviazione rimessaggio:", errore);
+    alert("Errore durante l'archiviazione del rimessaggio.");
+  }
+}
 async function eliminaRimessaggio(firebaseId) {
   if (!firebaseId) {
     alert("ID rimessaggio mancante");
@@ -3184,6 +3227,7 @@ altriCosti: preventivo.altro || "",
 
   const lavoriFiltrati = useMemo(() => {
   return lavori.filter((lavoro) => {
+    if (lavoro.archiviato) return false;
     const testo = [
   lavoro.id,
   lavoro.cliente,
@@ -3250,6 +3294,7 @@ altriCosti: preventivo.altro || "",
   
   const rimessaggiFiltrati = useMemo(() => {
   return rimessaggi.filter((r) => {
+    if (r.archiviato) return false;
     const testo = [
   r.id,
   r.cliente,
@@ -3797,6 +3842,56 @@ reader.readAsText(file);
     </div>
   </div>
 )}
+{sezione === "cantiere" && vista === "dashboard" && (
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: "18px",
+    }}
+  >
+    <button
+      type="button"
+      onClick={() => setVista("archivioLavori")}
+      style={{
+        padding: "12px 22px",
+        border: "none",
+        borderRadius: "10px",
+        background: "#475569",
+        color: "#ffffff",
+        fontWeight: "700",
+        cursor: "pointer",
+      }}
+    >
+      📦 Archivio lavori
+    </button>
+  </div>
+)}
+{sezione === "cantiere" && vista === "dashboard" && (
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: "18px",
+    }}
+  >
+    <button
+      type="button"
+      onClick={() => setVista("archivioRimessaggi")}
+      style={{
+        padding: "12px 22px",
+        border: "none",
+        borderRadius: "10px",
+        background: "#475569",
+        color: "#ffffff",
+        fontWeight: "700",
+        cursor: "pointer",
+      }}
+    >
+      📦 Archivio rimessaggi
+    </button>
+  </div>
+)}
         <header className="header">
   <div>
     <h1>
@@ -4294,7 +4389,320 @@ left: "250px",
     </button>
   </div>
 )}
+{vista === "archivioLavori" && (
+  <section
+    style={{
+      width: "100%",
+      background: "#ffffff",
+      borderRadius: "14px",
+      padding: "22px",
+      boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "18px",
+      }}
+    >
+      <div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "22px",
+            color: "#0f172a",
+          }}
+        >
+          Archivio lavori
+        </h2>
 
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#64748b",
+          }}
+        >
+          Lavori completati e archiviati
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setVista("dashboard")}
+        style={{
+          padding: "9px 14px",
+          border: "none",
+          borderRadius: "8px",
+          background: "#475569",
+          color: "white",
+          fontWeight: "700",
+          cursor: "pointer",
+        }}
+      >
+        Torna alla dashboard
+      </button>
+    </div>
+
+    <div
+      style={{
+        display: "grid",
+        gap: "10px",
+      }}
+    >
+      {lavori
+        .filter((lavoro) => lavoro.archiviato)
+        .map((lavoro) => (
+          <div
+            key={lavoro.firebaseId}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 160px 140px 110px 110px",
+              gap: "16px",
+              alignItems: "center",
+              padding: "14px 16px",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+            }}
+          >
+            <div>
+  <strong>
+    {lavoro.cliente || "-"}
+  </strong>
+
+  <div
+    style={{
+      marginTop: "4px",
+      fontSize: "13px",
+      color: "#64748b",
+    }}
+  >
+    {lavoro.titolo || "-"}
+  </div>
+</div>
+
+            <div>
+              {formatData(lavoro.ingresso)}
+            </div>
+
+            <div>
+              {lavoro.pagamento || "-"}
+            </div>
+<button
+  type="button"
+  onClick={() => {
+  setLavoroDaStampare(lavoro);
+
+  setTimeout(() => {
+    window.print();
+    setLavoroDaStampare(null);
+  }, 300);
+}}
+  style={{
+    padding: "8px 12px",
+    border: "none",
+    borderRadius: "8px",
+    background: "#475569",
+    color: "white",
+    fontWeight: "700",
+    cursor: "pointer",
+  }}
+>
+  Visualizza
+</button>
+            <button
+              type="button"
+              onClick={async () => {
+                await updateDoc(
+                  doc(db, "lavori", lavoro.firebaseId),
+                  {
+                    archiviato: false,
+                    archiviatoIl: "",
+                  }
+                );
+
+                alert("Lavoro ripristinato");
+              }}
+              style={{
+                padding: "8px 12px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#2563eb",
+                color: "white",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              Ripristina
+            </button>
+          </div>
+        ))}
+    </div>
+    
+  </section>
+)}
+{vista === "archivioRimessaggi" && (
+  <section
+    style={{
+      width: "100%",
+      background: "#ffffff",
+      borderRadius: "14px",
+      padding: "22px",
+      boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "18px",
+      }}
+    >
+      <div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "22px",
+            color: "#0f172a",
+          }}
+        >
+          Archivio rimessaggi
+        </h2>
+
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#64748b",
+          }}
+        >
+          Rimessaggi conclusi e archiviati
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setVista("dashboard")}
+        style={{
+          padding: "9px 14px",
+          border: "none",
+          borderRadius: "8px",
+          background: "#475569",
+          color: "white",
+          fontWeight: "700",
+          cursor: "pointer",
+        }}
+      >
+        Torna alla dashboard
+      </button>
+    </div>
+
+    <div
+      style={{
+        display: "grid",
+        gap: "10px",
+      }}
+    >
+      {rimessaggi
+        .filter((rimessaggio) => rimessaggio.archiviato)
+        .map((rimessaggio) => (
+          <div
+            key={rimessaggio.firebaseId}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 160px 140px 110px 110px",
+              gap: "16px",
+              alignItems: "center",
+              padding: "14px 16px",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+            }}
+          >
+            <div>
+              <strong>
+                {rimessaggio.cliente || "-"}
+              </strong>
+
+              <div
+                style={{
+                  marginTop: "4px",
+                  fontSize: "13px",
+                  color: "#64748b",
+                }}
+              >
+                {rimessaggio.id || "-"} — {rimessaggio.barca || "-"}
+              </div>
+            </div>
+
+            <div>
+              {formatData(rimessaggio.ingresso)}
+            </div>
+
+            <div>
+              {rimessaggio.pagamento || "-"}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setLavoroDaStampare(null);
+                setPreventivoDaStampare(null);
+                setStampaElencoLavori(false);
+                setStampaElencoRimessaggi(false);
+
+                setRimessaggioDaStampare(rimessaggio);
+
+                setTimeout(() => {
+                  window.print();
+                  setRimessaggioDaStampare(null);
+                }, 300);
+              }}
+              style={{
+                padding: "8px 12px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#475569",
+                color: "white",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              Visualizza
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                await updateDoc(
+                  doc(db, "rimessaggi", rimessaggio.firebaseId),
+                  {
+                    archiviato: false,
+                    archiviatoIl: "",
+                  }
+                );
+
+                alert("Rimessaggio ripristinato");
+              }}
+              style={{
+                padding: "8px 12px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#2563eb",
+                color: "white",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              Ripristina
+            </button>
+          </div>
+        ))}
+    </div>
+  </section>
+)}
 {vista === "rimessaggi" && (
   <>
   <div
@@ -7769,7 +8177,17 @@ padding: "10px",
         >
           PDF
         </button>
-
+<button
+  type="button"
+  className="actionBtn"
+  onClick={() => archiviaLavoro(lavoro)}
+  style={{
+    background: "#475569",
+    color: "white",
+  }}
+>
+  Archivia
+</button>
         <button
           type="button"
           className="actionBtn deleteBtn"
@@ -8678,13 +9096,24 @@ const saldoTotaleCliente =
     color: "white",
   }}
   onClick={() => {
-  setClienteAperto(
+  const nuovoAperto =
     clienteAperto === cliente.firebaseId
       ? null
-      : cliente.firebaseId
-  );
+      : cliente.firebaseId;
 
+  setClienteAperto(nuovoAperto);
   setRicerca("");
+
+  if (nuovoAperto) {
+    setTimeout(() => {
+      document
+        .getElementById(`storico-${cliente.firebaseId}`)
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 150);
+  }
 }}
 >
   📂 Storico
@@ -8710,6 +9139,7 @@ const saldoTotaleCliente =
   </div>
   {clienteAperto === cliente.firebaseId && (
   <div
+    id={`storico-${cliente.firebaseId}`}
     style={{
       marginTop: "15px",
       paddingTop: "15px",
@@ -8772,6 +9202,24 @@ const saldoTotaleCliente =
 </strong>
 {" — "}
 {lavoro.pagamento || "Non pagato"}
+{lavoro.archiviato && (
+  <>
+    {" — "}
+    <span
+      style={{
+        display: "inline-block",
+        padding: "3px 8px",
+        borderRadius: "999px",
+        background: "#e2e8f0",
+        color: "#475569",
+        fontSize: "11px",
+        fontWeight: "800",
+      }}
+    >
+      ARCHIVIATO
+    </span>
+  </>
+)}
           </div>
         ))
       )}
@@ -8866,6 +9314,24 @@ const saldoTotaleCliente =
 </strong>
 {" — "}
 {rimessaggio.pagamento || "Da pagare"}
+{rimessaggio.archiviato && (
+  <>
+    {" — "}
+    <span
+      style={{
+        display: "inline-block",
+        padding: "3px 8px",
+        borderRadius: "999px",
+        background: "#e2e8f0",
+        color: "#475569",
+        fontSize: "11px",
+        fontWeight: "800",
+      }}
+    >
+      ARCHIVIATO
+    </span>
+  </>
+)}
           </div>
         ))
       )}
@@ -9199,9 +9665,9 @@ const saldoTotaleCliente =
       <div
   style={{
     display: "grid",
-    gridTemplateColumns: "220px 150px 110px 110px 155px 135px",
+    gridTemplateColumns: "200px 135px 95px 95px 140px 120px",
     alignItems: "center",
-    columnGap: "18px",
+    columnGap: "12px",
     minWidth: 0,
     flex: 1,
   }}
@@ -9317,7 +9783,15 @@ const saldoTotaleCliente =
     </strong>
   </div>
 )}
-      <div className="actions">
+      <div
+  className="actions"
+  style={{
+    display: "flex",
+    gap: "8px",
+    flexWrap: "nowrap",
+    alignItems: "center",
+  }}
+>
         <button
   className="actionBtn editBtn"
   onClick={() => {
@@ -9351,14 +9825,26 @@ const saldoTotaleCliente =
 </button>
 
         <button
-          type="button"
-          className="actionBtn deleteBtn"
-          onClick={() =>
-            eliminaRimessaggio(rimessaggio.firebaseId)
-          }
-        >
-          Elimina
-        </button>
+  type="button"
+  className="actionBtn"
+  onClick={() => archiviaRimessaggio(rimessaggio)}
+  style={{
+    background: "#475569",
+    color: "white",
+  }}
+>
+  Archivia
+</button>
+
+<button
+  type="button"
+  className="actionBtn deleteBtn"
+  onClick={() =>
+    eliminaRimessaggio(rimessaggio.firebaseId)
+  }
+>
+  Elimina
+</button>
       </div>
     </div>
   </article>
