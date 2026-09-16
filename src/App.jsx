@@ -49,12 +49,28 @@ function nuovoLavoroVuoto() {
     altro: "",
 altriCosti: "",
     acconto: "",
-    pagamento: "Non pagato",   // ← AGGIUNGI QUESTA RIGA
+    pagamento: "Non pagato",
     archiviato: false,
     note: "",
   };
 }
-
+function nuovoRicambioVuoto() {
+  return {
+    cliente: "",
+    telefono: "",
+    ricambiDettaglio: [],
+    dataOrdine: new Date().toISOString().slice(0, 10),
+    fornitore: "",
+    stato: "Da ordinare",
+    pagamento: "Da pagare",
+    speseTrasporto: "",
+acconto: "",
+    note: "",
+tipoOrdine: "Negozio",
+statoEvasione: "Da evadere",
+archiviato: false,
+  };
+}
 function nuovoPreventivoVuoto() {
   return {
   id: "",
@@ -81,6 +97,10 @@ export default function App() {
   const [lavori, setLavori] = useState([]);
   const [preventivi, setPreventivi] = useState([]);
   const [rimessaggi, setRimessaggi] = useState([]);
+  const [ricambiAccessori, setRicambiAccessori] = useState([]);
+const [formRicambio, setFormRicambio] = useState(nuovoRicambioVuoto());
+const [ricambioInModifica, setRicambioInModifica] = useState(null);
+const [mostraFormRicambio, setMostraFormRicambio] = useState(false);
   const [clientiDb, setClientiDb] = useState([]);
   const [allievi, setAllievi] = useState([]);
   const [caricamento, setCaricamento] = useState(true);
@@ -95,6 +115,9 @@ export default function App() {
   const [mostraFormRimessaggio, setMostraFormRimessaggio] = useState(false);
   const [formPreventivo, setFormPreventivo] = useState(nuovoPreventivoVuoto());
   const [ricercaClientePreventivo, setRicercaClientePreventivo] = useState("");
+  const [ricercaOrdini, setRicercaOrdini] = useState("");
+  const [filtroTipoOrdine, setFiltroTipoOrdine] = useState("Tutti");
+  const [filtroStatoEvasione, setFiltroStatoEvasione] = useState("Tutti");
   const [formCliente, setFormCliente] = useState({
   cliente: "",
   telefono: "",
@@ -240,6 +263,7 @@ setTimeout(() => {
     setRimessaggi([]);
     setClientiDb([]);
     setAllievi([]);
+    setRicambiAccessori([]);
     return;
   }
 
@@ -259,6 +283,7 @@ setTimeout(() => {
   let stopRimessaggi = null;
   let stopPreventivi = null;
   let stopClienti = null;
+  let stopRicambiAccessori = null;
 
 
     stopLavori = onSnapshot(
@@ -318,16 +343,28 @@ setTimeout(() => {
         setClientiDb(dati);
       }
     );
+    stopRicambiAccessori = onSnapshot(
+  collection(db, "ricambiAccessori"),
+  (snapshot) => {
+    const dati = snapshot.docs.map((documento) => ({
+      ...documento.data(),
+      firebaseId: documento.id,
+    }));
+
+    setRicambiAccessori(dati);
+  }
+);
   
 
   return () => {
-    stopAllievi();
+  stopAllievi();
 
-    if (stopLavori) stopLavori();
-    if (stopPreventivi) stopPreventivi();
-    if (stopClienti) stopClienti();
-    if (stopRimessaggi) stopRimessaggi();
-  };
+  if (stopLavori) stopLavori();
+  if (stopPreventivi) stopPreventivi();
+  if (stopClienti) stopClienti();
+  if (stopRimessaggi) stopRimessaggi();
+  if (stopRicambiAccessori) stopRicambiAccessori();
+};
 }, [utente]);
 
   function generaCasellarioPDF() {
@@ -2212,6 +2249,29 @@ async function generaNumeroRimessaggio() {
 
   return `RIM-${anno}-${String(numeroProgressivo).padStart(4, "0")}`;
 }
+async function generaNumeroOrdine() {
+  const anno = new Date().getFullYear();
+  const contatoreRef = doc(db, "contatori", `ordini-${anno}`);
+
+  const numeroProgressivo = await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(contatoreRef);
+
+    let prossimoNumero = 1;
+
+    if (snapshot.exists()) {
+      prossimoNumero = (snapshot.data().ultimoNumero || 0) + 1;
+    }
+
+    transaction.set(contatoreRef, {
+      ultimoNumero: prossimoNumero,
+      anno,
+    });
+
+    return prossimoNumero;
+  });
+
+  return `ORD-${anno}-${String(numeroProgressivo).padStart(4, "0")}`;
+}
 
 async function generaNumeroPreventivo() {
   const anno = new Date().getFullYear();
@@ -2333,6 +2393,596 @@ async function ripristinaBackupDati(backup) {
   await ripristinaRaccolta("rimessaggi", backup.rimessaggi);
   await ripristinaRaccolta("allievi", backup.allievi);
   await ripristinaRaccolta("contatori", backup.contatori);
+}
+function generaOrdinePDF(ordine) {
+  const pdf = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const dati = ordine || formRicambio;
+
+  const numeroOrdine = dati.id || "ORDINE";
+  const cliente = dati.cliente || "-";
+  const telefono = dati.telefono || "-";
+  const tipoOrdine = dati.tipoOrdine || "Negozio";
+  const statoEvasione = dati.statoEvasione || "Da evadere";
+  const pagamento = dati.pagamento || "Da pagare";
+  const note = dati.note || "";
+
+  const dataOrdine = dati.dataCreazioneOrdine
+    ? new Date(
+        dati.dataCreazioneOrdine + "T00:00:00"
+      ).toLocaleDateString("it-IT")
+    : new Date().toLocaleDateString("it-IT");
+
+  const ricambi = dati.ricambiDettaglio || [];
+
+  const totaleRicambi = ricambi.reduce(
+    (totale, ricambio) =>
+      totale +
+      numero(ricambio.quantita) *
+        numero(ricambio.prezzo),
+    0
+  );
+
+  const speseTrasporto = numero(dati.speseTrasporto);
+  const acconto = numero(dati.acconto);
+
+  const totaleOrdine =
+    totaleRicambi + speseTrasporto;
+
+  const saldo =
+    totaleOrdine - acconto;
+
+  // INTESTAZIONE
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(18);
+
+  pdf.text(
+    "SEA SRLS",
+    105,
+    18,
+    { align: "center" }
+  );
+
+  pdf.setFontSize(15);
+
+  pdf.text(
+    "ORDINE RICAMBI / ACCESSORI",
+    105,
+    28,
+    { align: "center" }
+  );
+
+  pdf.setDrawColor(180);
+  pdf.line(15, 34, 195, 34);
+
+  // DATI ORDINE
+  pdf.setFontSize(10);
+  pdf.setFont("helvetica", "bold");
+
+  pdf.text(`N. ordine: ${numeroOrdine}`, 15, 44);
+  pdf.text(`Data: ${dataOrdine}`, 140, 44);
+
+  pdf.text("Cliente:", 15, 54);
+  pdf.setFont("helvetica", "normal");
+  pdf.text(cliente, 35, 54);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Telefono:", 110, 54);
+  pdf.setFont("helvetica", "normal");
+  pdf.text(telefono, 132, 54);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Tipo ordine:", 15, 63);
+  pdf.setFont("helvetica", "normal");
+  pdf.text(tipoOrdine, 42, 63);
+  pdf.setFont("helvetica", "bold");
+pdf.text("Stato ordine:", 110, 63);
+
+if (statoEvasione === "Da evadere") {
+  pdf.setTextColor(220, 38, 38);
+} else {
+  pdf.setTextColor(0, 0, 0);
+}
+
+pdf.setFont("helvetica", "normal");
+pdf.text(statoEvasione, 138, 63);
+
+pdf.setTextColor(0, 0, 0);
+
+  // TABELLA RICAMBI
+  let y = 77;
+
+  pdf.setFillColor(235, 238, 242);
+  pdf.rect(15, y - 6, 180, 9, "F");
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(9);
+
+  pdf.text("Codice", 17, y);
+  pdf.text("Descrizione", 45, y);
+  pdf.text("Qta", 120, y);
+  pdf.text("Prezzo", 140, y);
+  pdf.text("Totale", 171, y);
+
+  y += 8;
+
+  pdf.setFont("helvetica", "normal");
+
+  ricambi.forEach((ricambio) => {
+    if (y > 260) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    const codice = ricambio.codice || "-";
+
+    const descrizione = pdf.splitTextToSize(
+      ricambio.descrizione || "-",
+      68
+    );
+
+    const quantita =
+      numero(ricambio.quantita) || 1;
+
+    const prezzo =
+      numero(ricambio.prezzo);
+
+    const totale =
+      quantita * prezzo;
+
+    pdf.text(codice, 17, y);
+    pdf.text(descrizione, 45, y);
+    pdf.text(String(quantita), 123, y);
+
+    pdf.text(
+      euro(prezzo),
+      158,
+      y,
+      { align: "right" }
+    );
+
+    pdf.text(
+      euro(totale),
+      193,
+      y,
+      { align: "right" }
+    );
+
+    let stato = "-";
+
+    if (ricambio.disponibile) {
+      stato = "Disponibile";
+    }
+
+    if (ricambio.daOrdinare) {
+      stato = "Da ordinare";
+    }
+
+    if (ricambio.ordinato) {
+      stato = "Ordinato";
+    }
+
+    const dataRiga = ricambio.dataOrdine
+      ? new Date(
+          ricambio.dataOrdine + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "";
+
+    pdf.setFontSize(8);
+    pdf.setTextColor(100);
+
+    pdf.text(
+      `Stato: ${stato}${dataRiga ? ` - Data: ${dataRiga}` : ""}`,
+      45,
+      y + 4
+    );
+
+    pdf.setTextColor(0);
+    pdf.setFontSize(9);
+
+    y += Math.max(
+      11,
+      descrizione.length * 4 + 6
+    );
+
+    pdf.setDrawColor(225);
+    pdf.line(15, y - 4, 195, y - 4);
+  });
+
+  // TOTALI
+  y += 5;
+
+  if (y > 230) {
+    pdf.addPage();
+    y = 25;
+  }
+
+  pdf.setFontSize(10);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.text("Totale ricambi:", 130, y);
+  pdf.text(euro(totaleRicambi), 193, y, {
+    align: "right",
+  });
+
+  y += 7;
+
+  pdf.text("Spese di trasporto:", 130, y);
+  pdf.text(euro(speseTrasporto), 193, y, {
+    align: "right",
+  });
+
+  y += 8;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+
+  pdf.text("TOTALE ORDINE:", 130, y);
+  pdf.text(euro(totaleOrdine), 193, y, {
+    align: "right",
+  });
+
+  y += 9;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+
+  pdf.text("Acconto:", 130, y);
+  pdf.text(euro(acconto), 193, y, {
+    align: "right",
+  });
+
+  y += 8;
+
+  pdf.setFont("helvetica", "bold");
+
+  pdf.text("Saldo da incassare:", 130, y);
+
+  pdf.setTextColor(220, 38, 38);
+
+  pdf.text(euro(saldo), 193, y, {
+    align: "right",
+  });
+
+  pdf.setTextColor(0);
+
+  // PAGAMENTO
+  y += 13;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Pagamento:", 15, y);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.text(pagamento, 40, y);
+
+  // NOTE
+  if (note.trim()) {
+    y += 12;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Note:", 15, y);
+
+    y += 6;
+
+    pdf.setFont("helvetica", "normal");
+
+    const righeNote = pdf.splitTextToSize(
+      note,
+      175
+    );
+
+    pdf.text(righeNote, 15, y);
+  }
+
+  // PIE' DI PAGINA
+  pdf.setFontSize(8);
+  pdf.setTextColor(120);
+
+  pdf.text(
+    "SEA SRLS - Ordine ricambi e accessori",
+    105,
+    290,
+    { align: "center" }
+  );
+
+  const pdfBlob = pdf.output("blob");
+const pdfUrl = URL.createObjectURL(pdfBlob);
+
+window.open(pdfUrl, "_blank");
+}
+function generaPDFRicambiDaApprovvigionare() {
+  const pdf = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const righe = [];
+
+  ricambiAccessori
+    .filter(
+      (ordine) =>
+        !ordine.archiviato &&
+        (ordine.statoEvasione || "Da evadere") !== "Evaso"
+    )
+    .forEach((ordine) => {
+      (ordine.ricambiDettaglio || []).forEach((ricambio) => {
+        if (ricambio.daOrdinare || ricambio.ordinato) {
+          righe.push({
+            codice: ricambio.codice || "-",
+            descrizione: ricambio.descrizione || "-",
+            quantita: ricambio.quantita || 1,
+            stato: ricambio.ordinato ? "Ordinato" : "Da ordinare",
+            cliente: ordine.cliente || "-",
+            numeroOrdine: ordine.id || "-",
+            dataOrdineCliente: ordine.dataCreazioneOrdine
+  ? new Date(
+      ordine.dataCreazioneOrdine + "T00:00:00"
+    ).toLocaleDateString("it-IT")
+  : ordine.dataOrdine
+  ? new Date(
+      ordine.dataOrdine + "T00:00:00"
+    ).toLocaleDateString("it-IT")
+  : "-",
+            dataOrdine:
+  ricambio.ordinato && ricambio.dataOrdine
+    ? new Date(
+        ricambio.dataOrdine + "T00:00:00"
+      ).toLocaleDateString("it-IT")
+    : "-",
+          });
+        }
+      });
+    });
+
+  if (righe.length === 0) {
+    alert("Non ci sono ricambi da ordinare o già ordinati.");
+    return;
+  }
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(16);
+
+  pdf.text(
+    "RICAMBI DA APPROVVIGIONARE",
+    148,
+    15,
+    { align: "center" }
+  );
+
+  pdf.setFontSize(9);
+  pdf.setFont("helvetica", "normal");
+
+  pdf.text(
+    `Generato il ${new Date().toLocaleDateString("it-IT")}`,
+    148,
+    22,
+    { align: "center" }
+  );
+
+  let y = 34;
+
+  const colonne = {
+  codice: 10,
+  descrizione: 45,
+  quantita: 142,
+  stato: 158,
+  cliente: 210,
+  ordine: 252,
+  dataOrdineCliente: 278,
+};
+
+
+  const gruppiOrdine = righe.reduce((gruppi, riga) => {
+  const chiave = riga.numeroOrdine || "-";
+
+  if (!gruppi[chiave]) {
+    gruppi[chiave] = {
+      cliente: riga.cliente,
+      numeroOrdine: riga.numeroOrdine,
+      dataOrdineCliente: riga.dataOrdineCliente,
+      articoli: [],
+    };
+  }
+
+  gruppi[chiave].articoli.push(riga);
+
+  return gruppi;
+}, {});
+
+Object.values(gruppiOrdine).forEach((gruppo) => {
+  if (y > 175) {
+    pdf.addPage();
+    y = 20;
+  }
+
+  // Intestazione singolo ordine
+  pdf.setFillColor(245, 247, 250);
+  pdf.rect(10, y - 5, 277, 10, "F");
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    `Cliente: ${gruppo.cliente}`,
+    14,
+    y
+  );
+
+  pdf.text(
+    `N. ordine: ${gruppo.numeroOrdine}`,
+    150,
+    y
+  );
+
+  pdf.text(
+    `Data ordine: ${gruppo.dataOrdineCliente}`,
+    225,
+    y
+  );
+
+  y += 9;
+
+  // Intestazione articoli
+  pdf.setFillColor(235, 238, 242);
+  pdf.rect(10, y - 5, 277, 9, "F");
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(9);
+
+  pdf.text("Codice", colonne.codice, y);
+  pdf.text("Descrizione", colonne.descrizione, y);
+  pdf.text("Qtà", colonne.quantita, y);
+  pdf.text("Stato", colonne.stato, y);
+
+  y += 8;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  // Articoli dello stesso ordine
+  gruppo.articoli.forEach((riga) => {
+    if (y > 190) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    const descrizione = pdf.splitTextToSize(
+      riga.descrizione,
+      95
+    );
+
+    pdf.text(
+      riga.codice || "-",
+      colonne.codice,
+      y
+    );
+
+    pdf.text(
+      descrizione,
+      colonne.descrizione,
+      y
+    );
+
+    pdf.text(
+      String(riga.quantita || 1),
+      colonne.quantita,
+      y
+    );
+
+    if (
+      riga.stato === "Ordinato" &&
+      riga.dataOrdine !== "-"
+    ) {
+      pdf.text(
+        `Ordinato - ${riga.dataOrdine}`,
+        colonne.stato,
+        y
+      );
+    } else {
+      pdf.text(
+        riga.stato || "-",
+        colonne.stato,
+        y
+      );
+    }
+
+    const altezzaRiga =
+      Math.max(descrizione.length, 1) * 4 + 6;
+
+    y += altezzaRiga;
+  });
+
+  pdf.setDrawColor(210);
+  pdf.line(10, y - 2, 287, y - 2);
+
+  y += 6;
+});
+
+const pdfBlob = pdf.output("blob");
+const pdfUrl = URL.createObjectURL(pdfBlob);
+
+window.open(pdfUrl, "_blank");
+}
+
+async function salvaRicambio(e) {
+  e.preventDefault();
+
+  if (!formRicambio.cliente.trim()) {
+    alert("Inserisci il cliente.");
+    return;
+  }
+
+  if (
+    !formRicambio.ricambiDettaglio ||
+    formRicambio.ricambiDettaglio.length === 0
+  ) {
+    alert("Inserisci almeno un ricambio.");
+    return;
+  }
+
+  const righeValide = formRicambio.ricambiDettaglio.filter(
+    (ricambio) =>
+      (ricambio.codice || "").trim() ||
+      (ricambio.descrizione || "").trim()
+  );
+
+  if (righeValide.length === 0) {
+    alert("Inserisci almeno un ricambio con codice o descrizione.");
+    return;
+  }
+
+  const datiOrdine = {
+    ...formRicambio,
+    ricambiDettaglio: righeValide.map((ricambio) => ({
+      codice: ricambio.codice || "",
+      descrizione: ricambio.descrizione || "",
+      quantita: Number(ricambio.quantita || 1),
+      prezzo: Number(ricambio.prezzo || 0),
+      disponibile: ricambio.disponibile || false,
+      daOrdinare: ricambio.daOrdinare || false,
+      ordinato: ricambio.ordinato || false,
+      dataOrdine: ricambio.dataOrdine || "",
+    })),
+  };
+
+  delete datiOrdine.firebaseId;
+
+  try {
+    if (ricambioInModifica) {
+      await updateDoc(
+        doc(db, "ricambiAccessori", ricambioInModifica),
+        datiOrdine
+      );
+
+      alert("Ordine aggiornato");
+    } else {
+      const idOrdine = await generaNumeroOrdine();
+
+await addDoc(
+  collection(db, "ricambiAccessori"),
+  {
+    ...datiOrdine,
+    id: idOrdine,
+    dataCreazioneOrdine: new Date().toISOString().slice(0, 10),
+    creatoIl: new Date().toISOString(),
+  }
+);
+
+      alert("Ordine salvato");
+    }
+
+    setFormRicambio(nuovoRicambioVuoto());
+    setRicambioInModifica(null);
+    setMostraFormRicambio(false);
+  } catch (errore) {
+    console.error("Errore salvataggio ordine:", errore);
+    alert("Errore durante il salvataggio dell'ordine.");
+  }
 }
 async function salvaRimessaggio() {
   if (!form.cliente?.trim()) {
@@ -3892,6 +4542,31 @@ reader.readAsText(file);
     </button>
   </div>
 )}
+{sezione === "cantiere" && vista === "dashboard" && (
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "center",
+      marginBottom: "18px",
+    }}
+  >
+    <button
+      type="button"
+      onClick={() => setVista("archivioOrdini")}
+      style={{
+        padding: "12px 22px",
+        border: "none",
+        borderRadius: "10px",
+        background: "#475569",
+        color: "#ffffff",
+        fontWeight: "700",
+        cursor: "pointer",
+      }}
+    >
+      📦 Archivio ordini
+    </button>
+  </div>
+)}
         <header className="header">
   <div>
     <h1>
@@ -3992,6 +4667,7 @@ reader.readAsText(file);
   setRimessaggioInModifica(null);
   setMostraFormRimessaggio(false);
 }}
+
   >
     Rimessaggi
   </button>
@@ -4009,6 +4685,19 @@ reader.readAsText(file);
 >
   Preventivi
 </button>
+)}
+{sezione === "cantiere" && (
+  <button
+    className={vista === "ricambiAccessori" ? "active" : ""}
+    onClick={() => {
+      setVista("ricambiAccessori");
+      setFormRicambio(nuovoRicambioVuoto());
+      setRicambioInModifica(null);
+      setMostraFormRicambio(false);
+    }}
+  >
+    Ricambi / Accessori
+  </button>
 )}
 {sezione === "scuola" && (
   <>
@@ -4703,6 +5392,205 @@ left: "250px",
     </div>
   </section>
 )}
+{vista === "archivioOrdini" && (
+  <section
+    style={{
+      width: "100%",
+      maxWidth: "1280px",
+      margin: "0 auto",
+      background: "#ffffff",
+      borderRadius: "14px",
+      padding: "22px",
+      boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "18px",
+      }}
+    >
+      <div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "22px",
+            color: "#0f172a",
+          }}
+        >
+          Archivio ordini
+        </h2>
+
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#64748b",
+          }}
+        >
+          Ordini ricambi e accessori archiviati
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setVista("ricambiAccessori")}
+        style={{
+          padding: "9px 14px",
+          border: "none",
+          borderRadius: "8px",
+          background: "#475569",
+          color: "white",
+          fontWeight: "700",
+          cursor: "pointer",
+        }}
+      >
+        Torna agli ordini
+      </button>
+    </div>
+
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "150px 1.8fr 160px 150px 170px 140px",
+        gap: "12px",
+        padding: "0 14px 8px",
+        fontSize: "12px",
+        fontWeight: "800",
+        color: "#64748b",
+        textTransform: "uppercase",
+      }}
+    >
+      <div>N. ordine</div>
+<div>Cliente</div>
+<div>Data</div>
+<div>Stato</div>
+<div>Pagamento</div>
+<div>Azioni</div>
+    </div>
+
+    <div
+      style={{
+        display: "grid",
+        gap: "10px",
+      }}
+    >
+      {ricambiAccessori
+        .filter((ordine) => ordine.archiviato)
+        .map((ordine) => (
+          <div
+            key={ordine.firebaseId}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "150px 1.8fr 160px 150px 170px 140px",
+              gap: "12px",
+              alignItems: "center",
+              padding: "14px",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+            }}
+          >
+            <div>
+  <strong>{ordine.id || "-"}</strong>
+</div>
+            <div>
+              <strong>{ordine.cliente || "-"}</strong>
+
+              <div
+                style={{
+                  marginTop: "4px",
+                  fontSize: "12px",
+                  color: "#64748b",
+                }}
+              >
+                {ordine.telefono || "-"}
+              </div>
+            </div>
+
+            <div>
+              {ordine.dataCreazioneOrdine
+                ? new Date(
+                    ordine.dataCreazioneOrdine + "T00:00:00"
+                  ).toLocaleDateString("it-IT")
+                : ordine.dataOrdine
+                ? new Date(
+                    ordine.dataOrdine + "T00:00:00"
+                  ).toLocaleDateString("it-IT")
+                : "-"}
+            </div>
+
+            <div>
+              <strong>
+                {(ordine.ricambiDettaglio || []).every(
+                  (r) => r.ordinato
+                )
+                  ? "Ordinato"
+                  : (ordine.ricambiDettaglio || []).some(
+                      (r) => r.daOrdinare
+                    )
+                  ? "Da ordinare"
+                  : (ordine.ricambiDettaglio || []).some(
+                      (r) => r.disponibile
+                    )
+                  ? "Disponibile"
+                  : "-"}
+              </strong>
+            </div>
+
+            <div>
+              {ordine.pagamento || "Da pagare"}
+            </div>
+
+            <button
+              type="button"
+              onClick={async () => {
+                await updateDoc(
+                  doc(
+                    db,
+                    "ricambiAccessori",
+                    ordine.firebaseId
+                  ),
+                  {
+                    archiviato: false,
+                    archiviatoIl: "",
+                  }
+                );
+
+                alert("Ordine ripristinato");
+              }}
+              style={{
+                padding: "8px 12px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#2563eb",
+                color: "white",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              Ripristina
+            </button>
+          </div>
+        ))}
+
+      {ricambiAccessori.filter(
+        (ordine) => ordine.archiviato
+      ).length === 0 && (
+        <div
+          style={{
+            padding: "20px",
+            textAlign: "center",
+            color: "#64748b",
+          }}
+        >
+          Nessun ordine archiviato.
+        </div>
+      )}
+    </div>
+  </section>
+)}
 {vista === "rimessaggi" && (
   <>
   <div
@@ -4817,6 +5705,7 @@ left: "250px",
   gridTemplateColumns:
     vista === "clienti" ||
     vista === "incassi" ||
+    vista === "ricambiAccessori" ||
     vista === "allievi" ||
     vista === "incassiScuola" ||
     (vista === "rimessaggi" && !mostraFormRimessaggio) ||
@@ -4826,6 +5715,1301 @@ left: "250px",
       : "minmax(0, 1fr) minmax(620px, 1.35fr)",
 }}
 >
+  {sezione === "cantiere" && vista === "ricambiAccessori" && (
+  <section
+  style={{
+    width: "100%",
+    maxWidth: "none",
+    margin: "0 auto",
+    background: "#ffffff",
+    borderRadius: "14px",
+    padding: "22px",
+    boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+  }}
+>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "20px",
+      }}
+    >
+      <div>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "22px",
+            color: "#0f172a",
+          }}
+        >
+          Ordini ricambi e accessori
+        </h2>
+
+        <div
+          style={{
+            marginTop: "4px",
+            fontSize: "13px",
+            color: "#64748b",
+          }}
+        >
+          Ordini e articoli da consegnare ai clienti
+        </div>
+      </div>
+
+      <div
+  style={{
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+  }}
+>
+  <button
+    type="button"
+    className="clientBtn"
+    style={{
+      background: "#0f766e",
+      color: "white",
+    }}
+    onClick={generaPDFRicambiDaApprovvigionare}
+  >
+    PDF ricambi da approvvigionare
+  </button>
+
+  <button
+    type="button"
+    className="primary"
+    onClick={() => {
+      setFormRicambio(nuovoRicambioVuoto());
+      setRicambioInModifica(null);
+      setMostraFormRicambio(true);
+    }}
+  >
+    + Nuovo ordine
+  </button>
+</div>
+    </div>
+{mostraFormRicambio && (
+  <form
+    onSubmit={salvaRicambio}
+    style={{
+      background: "#f8fafc",
+      border: "1px solid #e2e8f0",
+      borderRadius: "12px",
+      padding: "20px",
+      marginBottom: "20px",
+    }}
+  >
+    <div
+  style={{
+    position: "relative",
+    marginBottom: "18px",
+  }}
+>
+  <h3
+    style={{
+      margin: 0,
+      textAlign: "center",
+      fontSize: "20px",
+      color: "#0f172a",
+    }}
+  >
+    {ricambioInModifica ? "Modifica ordine" : "Nuovo ordine"}
+  </h3>
+{formRicambio.id && (
+  <div
+    style={{
+      textAlign: "center",
+      marginTop: "10px",
+      marginBottom: "16px",
+      fontSize: "14px",
+      color: "#475569",
+      fontWeight: "700",
+    }}
+  >
+    N. ordine: {formRicambio.id}
+  </div>
+)}
+  <button
+    type="button"
+    onClick={() => {
+      setMostraFormRicambio(false);
+      setRicambioInModifica(null);
+      setFormRicambio(nuovoRicambioVuoto());
+    }}
+    style={{
+      position: "absolute",
+      right: 0,
+      top: "-4px",
+      border: "none",
+      background: "transparent",
+      fontSize: "22px",
+      cursor: "pointer",
+    }}
+  >
+    ×
+  </button>
+</div>
+
+    <div
+  style={{
+    marginBottom: "18px",
+  }}
+>
+  <label
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      fontWeight: "700",
+    }}
+  >
+    Cerca cliente registrato
+
+    <input
+      type="text"
+      list="clientiListRicambi"
+      placeholder="Scrivi nome o telefono"
+      value={formRicambio.cliente}
+      onChange={(e) => {
+        const valore = e.target.value;
+
+        const cliente = clientiDb.find(
+          (c) =>
+            (c.cliente || "").toLowerCase() ===
+              valore.toLowerCase() ||
+            (c.telefono || "") === valore
+        );
+
+        if (cliente) {
+          setFormRicambio({
+            ...formRicambio,
+            cliente: cliente.cliente || "",
+            telefono: cliente.telefono || "",
+          });
+        } else {
+          setFormRicambio({
+            ...formRicambio,
+            cliente: valore,
+          });
+        }
+      }}
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+
+    <datalist id="clientiListRicambi">
+      {clientiDb.map((cliente) => (
+        <option
+          key={cliente.firebaseId}
+          value={cliente.cliente}
+        >
+          {cliente.telefono || ""}
+        </option>
+      ))}
+    </datalist>
+  </label>
+</div>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "14px",
+  }}
+>
+  <label
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      fontWeight: "700",
+    }}
+  >
+    Cliente *
+
+    <input
+      type="text"
+      value={formRicambio.cliente}
+      onChange={(e) =>
+        setFormRicambio({
+          ...formRicambio,
+          cliente: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+
+  <label
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      fontWeight: "700",
+    }}
+  >
+    Telefono
+
+    <input
+      type="text"
+      value={formRicambio.telefono}
+      onChange={(e) =>
+        setFormRicambio({
+          ...formRicambio,
+          telefono: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+</div>
+
+       
+  <div
+  style={{
+    border: "1px solid #d1d5db",
+    borderRadius: "10px",
+    padding: "14px",
+    marginBottom: "16px",
+    width: "100%",
+    boxSizing: "border-box",
+  }}
+>
+  <strong
+    style={{
+      display: "block",
+      textAlign: "center",
+      fontSize: "18px",
+    }}
+  >
+    Ricambi / materiali
+  </strong>
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns:
+      "110px 300px 60px 55px 100px 90px 95px 90px 130px 45px",
+    gap: "8px",
+    alignItems: "center",
+    marginTop: "12px",
+    marginBottom: "4px",
+    fontSize: "12px",
+    fontWeight: "700",
+    color: "#475569",
+    textAlign: "center",
+  }}
+>
+  <div>Codice</div>
+  <div>Descrizione</div>
+  <div>Qtà</div>
+  <div>Prezzo €</div>
+  <div>Totale</div>
+  <div></div>
+</div>
+  {(formRicambio.ricambiDettaglio || []).map((ricambio, index) => (
+    <div
+      key={index}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "120px 300px 45px 70px 100px 90px 95px 90px 130px 45px",
+        gap: "8px",
+        alignItems: "center",
+        marginTop: "10px",
+      }}
+    >
+      <input
+  type="text"
+  placeholder="Codice"
+  value={ricambio.codice || ""}
+  onChange={(e) => {
+    const nuovi = [...(formRicambio.ricambiDettaglio || [])];
+
+    nuovi[index] = {
+      ...nuovi[index],
+      codice: e.target.value,
+    };
+
+    setFormRicambio({
+      ...formRicambio,
+      ricambiDettaglio: nuovi,
+    });
+  }}
+  style={{
+    height: "40px",
+    padding: "8px 10px",
+    boxSizing: "border-box",
+  }}
+/>
+
+      <input
+        type="text"
+        placeholder="Descrizione ricambio"
+        value={ricambio.descrizione || ""}
+        onChange={(e) => {
+          const nuovi = [...(formRicambio.ricambiDettaglio || [])];
+
+          nuovi[index] = {
+            ...nuovi[index],
+            descrizione: e.target.value,
+          };
+
+          setFormRicambio({
+            ...formRicambio,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+        style={{
+  height: "40px",
+  padding: "8px 10px",
+  boxSizing: "border-box",
+}}
+      />
+
+      <input
+        type="number"
+        min="1"
+        placeholder="Qtà"
+        value={ricambio.quantita || ""}
+        onWheel={(e) => e.currentTarget.blur()}
+        onChange={(e) => {
+          const nuovi = [...(formRicambio.ricambiDettaglio || [])];
+
+          nuovi[index] = {
+            ...nuovi[index],
+            quantita: e.target.value,
+          };
+
+          setFormRicambio({
+            ...formRicambio,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+        style={{
+  height: "40px",
+  padding: "8px 10px",
+  boxSizing: "border-box",
+}}
+      />
+
+      <input
+        type="number"
+        step="0.01"
+        placeholder="Prezzo €"
+        value={ricambio.prezzo || ""}
+        onWheel={(e) => e.currentTarget.blur()}
+        onChange={(e) => {
+          const nuovi = [...(formRicambio.ricambiDettaglio || [])];
+
+          nuovi[index] = {
+            ...nuovi[index],
+            prezzo: e.target.value,
+          };
+
+          setFormRicambio({
+            ...formRicambio,
+            ricambiDettaglio: nuovi,
+          });
+        }}
+        style={{
+  height: "40px",
+  padding: "8px 10px",
+  boxSizing: "border-box",
+}}
+      />
+
+      <strong>
+  {euro(
+    numero(ricambio.quantita) *
+      numero(ricambio.prezzo)
+  )}
+</strong>
+
+<label
+  style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+    fontSize: "14px",
+    height: "40px",
+  }}
+>
+  <input
+    type="checkbox"
+    checked={ricambio.disponibile || false}
+    onChange={(e) => {
+  const nuovi = [...(formRicambio.ricambiDettaglio || [])];
+
+  nuovi[index] = {
+    ...nuovi[index],
+    disponibile: e.target.checked,
+    daOrdinare: false,
+    ordinato: false,
+  };
+
+  setFormRicambio({
+    ...formRicambio,
+    ricambiDettaglio: nuovi,
+  });
+}}
+    style={{
+  transform: "scale(1.35)",
+  cursor: "pointer",
+}}
+  />
+  Disponibile
+</label>
+
+<label
+  style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+    fontSize: "12px",
+  }}
+>
+  <input
+  type="checkbox"
+  checked={ricambio.daOrdinare || false}
+  onChange={(e) => {
+  const nuovi = [...(formRicambio.ricambiDettaglio || [])];
+
+  nuovi[index] = {
+    ...nuovi[index],
+    disponibile: false,
+    daOrdinare: e.target.checked,
+    ordinato: false,
+  };
+
+  setFormRicambio({
+    ...formRicambio,
+    ricambiDettaglio: nuovi,
+  });
+}}
+  style={{
+    transform: "scale(1.35)",
+    cursor: "pointer",
+  }}
+/>
+  Da ordinare
+</label>
+
+<label
+  style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+    fontSize: "12px",
+  }}
+>
+  <input
+  type="checkbox"
+  checked={ricambio.ordinato || false}
+  onChange={(e) => {
+  const nuovi = [...(formRicambio.ricambiDettaglio || [])];
+
+  nuovi[index] = {
+    ...nuovi[index],
+    disponibile: false,
+    daOrdinare: false,
+    ordinato: e.target.checked,
+  };
+
+  setFormRicambio({
+    ...formRicambio,
+    ricambiDettaglio: nuovi,
+  });
+}}
+  style={{
+    transform: "scale(1.35)",
+    cursor: "pointer",
+  }}
+/>
+  Ordinato il
+</label>
+<input
+  type="date"
+  value={ricambio.dataOrdine || ""}
+  onChange={(e) => {
+    const nuovi = [...(formRicambio.ricambiDettaglio || [])];
+
+    nuovi[index] = {
+      ...nuovi[index],
+      dataOrdine: e.target.value,
+    };
+
+    setFormRicambio({
+      ...formRicambio,
+      ricambiDettaglio: nuovi,
+    });
+  }}
+  style={{
+  height: "40px",
+  padding: "8px 10px",
+  boxSizing: "border-box",
+}}
+/>
+<button
+  type="button"
+  onClick={() => {
+    const nuovi = (formRicambio.ricambiDettaglio || []).filter(
+      (_, i) => i !== index
+    );
+
+    setFormRicambio({
+      ...formRicambio,
+      ricambiDettaglio: nuovi,
+    });
+  }}
+  style={{
+    height: "40px",
+    minWidth: "45px",
+    padding: "0",
+  }}
+>
+  🗑
+</button>
+    </div>
+  ))}
+
+  <button
+    type="button"
+    style={{
+      marginTop: "12px",
+      display: "block",
+      marginLeft: "auto",
+      marginRight: "auto",
+    }}
+    onClick={() =>
+      setFormRicambio({
+        ...formRicambio,
+        ricambiDettaglio: [
+          ...(formRicambio.ricambiDettaglio || []),
+          {
+  codice: "",
+  descrizione: "",
+  quantita: 1,
+  prezzo: "",
+},
+        ],
+      })
+    }
+  >
+    + Aggiungi ricambio
+  </button>
+</div>
+
+ <div
+  style={{
+    marginTop: "16px",
+    marginBottom: "16px",
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "14px",
+  }}
+>
+  <label
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      fontWeight: "700",
+    }}
+  >
+    Spese di trasporto €
+
+    <input
+      type="number"
+      step="0.01"
+      min="0"
+      value={formRicambio.speseTrasporto || ""}
+      onChange={(e) =>
+        setFormRicambio({
+          ...formRicambio,
+          speseTrasporto: e.target.value,
+        })
+      }
+      style={{
+  height: "40px",
+  padding: "8px 10px",
+  boxSizing: "border-box",
+}}
+    />
+  </label>
+
+  <label
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      fontWeight: "700",
+    }}
+  >
+    Acconto €
+
+    <input
+      type="number"
+      step="0.01"
+      min="0"
+      value={formRicambio.acconto || ""}
+      onChange={(e) =>
+        setFormRicambio({
+          ...formRicambio,
+          acconto: e.target.value,
+        })
+      }
+      style={{
+  height: "40px",
+  padding: "8px 10px",
+  boxSizing: "border-box",
+}}
+    />
+  </label>
+</div>
+
+<label
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    fontWeight: "700",
+    marginBottom: "14px",
+  }}
+>
+  
+</label>
+
+
+<div
+  style={{
+    border: "1px solid #cbd5e1",
+    borderRadius: "10px",
+    padding: "16px",
+    marginBottom: "16px",
+    background: "#f8fafc",
+  }}
+>
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: "8px",
+    }}
+  >
+    <span>Totale ricambi</span>
+    <strong>
+      {euro(
+        (formRicambio.ricambiDettaglio || []).reduce(
+          (totale, ricambio) =>
+            totale +
+            numero(ricambio.quantita) *
+              numero(ricambio.prezzo),
+          0
+        )
+      )}
+    </strong>
+  </div>
+
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: "8px",
+    }}
+  >
+    <span>Spese di trasporto</span>
+    <strong>
+      {euro(numero(formRicambio.speseTrasporto))}
+    </strong>
+  </div>
+
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: "8px",
+      fontSize: "17px",
+    }}
+  >
+    <span>Totale ordine</span>
+    <strong>
+      {euro(
+        (formRicambio.ricambiDettaglio || []).reduce(
+          (totale, ricambio) =>
+            totale +
+            numero(ricambio.quantita) *
+              numero(ricambio.prezzo),
+          0
+        ) +
+          numero(formRicambio.speseTrasporto)
+      )}
+    </strong>
+  </div>
+
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: "8px",
+    }}
+  >
+    <span>Acconto</span>
+    <strong>
+      {euro(numero(formRicambio.acconto))}
+    </strong>
+  </div>
+
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      fontSize: "18px",
+      fontWeight: "800",
+    }}
+  >
+    <span>Saldo da incassare</span>
+    <strong
+  style={{
+    color: "#dc2626",
+  }}
+>
+  {euro(
+    (formRicambio.ricambiDettaglio || []).reduce(
+      (totale, ricambio) =>
+        totale +
+        numero(ricambio.quantita) *
+          numero(ricambio.prezzo),
+      0
+    ) +
+      numero(formRicambio.speseTrasporto) -
+      numero(formRicambio.acconto)
+  )}
+</strong>
+  </div>
+</div>
+
+    <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "220px",
+    gap: "14px",
+    marginTop: "14px",
+  }}
+>
+  <label>
+    Pagamento
+
+    <select
+      value={formRicambio.pagamento}
+      onChange={(e) =>
+        setFormRicambio({
+          ...formRicambio,
+          pagamento: e.target.value,
+        })
+      }
+    >
+      <option value="Da pagare">Da pagare</option>
+      <option value="Pagato">Pagato</option>
+      <option value="Fatturato">Fatturato</option>
+    </select>
+  </label>
+</div>
+
+<div
+  style={{
+    marginTop: "16px",
+  }}
+>
+  <label
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      fontWeight: "700",
+    }}
+  >
+    Note
+
+    <textarea
+      rows="4"
+      value={formRicambio.note}
+      onChange={(e) =>
+        setFormRicambio({
+          ...formRicambio,
+          note: e.target.value,
+        })
+      }
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        resize: "vertical",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+      }}
+    />
+  </label>
+</div>
+<div
+  style={{
+    marginTop: "16px",
+    maxWidth: "320px",
+  }}
+>
+  <label
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      fontWeight: "700",
+    }}
+  >
+    Tipo ordine
+
+    <select
+      value={formRicambio.tipoOrdine || "Negozio"}
+      onChange={(e) =>
+        setFormRicambio({
+          ...formRicambio,
+          tipoOrdine: e.target.value,
+        })
+      }
+    >
+      <option value="Negozio">Negozio</option>
+      <option value="eBay">eBay</option>
+      <option value="Sito internet">Sito internet</option>
+    </select>
+  </label>
+</div>
+<div
+  style={{
+    marginTop: "16px",
+    maxWidth: "320px",
+  }}
+>
+  <label
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      fontWeight: "700",
+    }}
+  >
+    Stato ordine
+
+    <select
+      value={formRicambio.statoEvasione || "Da evadere"}
+      onChange={(e) =>
+        setFormRicambio({
+          ...formRicambio,
+          statoEvasione: e.target.value,
+        })
+      }
+    >
+      <option value="Da evadere">Da evadere</option>
+      <option value="Evaso">Evaso</option>
+    </select>
+  </label>
+</div>
+
+    <div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "10px",
+    marginTop: "18px",
+  }}
+>
+  <button
+    type="button"
+    onClick={() => {
+      setMostraFormRicambio(false);
+      setRicambioInModifica(null);
+      setFormRicambio(nuovoRicambioVuoto());
+    }}
+  >
+    Annulla
+  </button>
+
+  <button
+    type="button"
+    className="clientBtn"
+    style={{
+      background: "#0f766e",
+      color: "white",
+    }}
+    onClick={() => generaOrdinePDF(formRicambio)}
+  >
+    PDF
+  </button>
+
+  <button type="submit" className="primary">
+    {ricambioInModifica ? "Salva modifiche" : "Salva ordine"}
+  </button>
+</div>
+  </form>
+)}
+    {!mostraFormRicambio && (
+      <>
+      <div
+  style={{
+    marginBottom: "16px",
+  }}
+>
+  <input
+    type="text"
+    placeholder="Cerca per numero ordine, cliente o telefono..."
+    value={ricercaOrdini}
+    onChange={(e) => setRicercaOrdini(e.target.value)}
+    style={{
+      width: "100%",
+      padding: "10px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+      boxSizing: "border-box",
+    }}
+  />
+</div>
+<div
+  style={{
+    display: "flex",
+    gap: "12px",
+    alignItems: "flex-end",
+    marginBottom: "16px",
+  }}
+>
+  <div>
+    <div
+      style={{
+        marginBottom: "6px",
+        fontSize: "12px",
+        fontWeight: "700",
+        color: "#64748b",
+      }}
+    >
+      Tipo ordine
+    </div>
+
+    <select
+      value={filtroTipoOrdine}
+      onChange={(e) => setFiltroTipoOrdine(e.target.value)}
+      style={{
+        width: "220px",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+        boxSizing: "border-box",
+      }}
+    >
+      <option value="Tutti">Tutti i tipi</option>
+      <option value="Negozio">Negozio</option>
+      <option value="eBay">eBay</option>
+      <option value="Sito internet">Sito internet</option>
+    </select>
+  </div>
+
+  <div>
+    <div
+      style={{
+        marginBottom: "6px",
+        fontSize: "12px",
+        fontWeight: "700",
+        color: "#64748b",
+      }}
+    >
+      Stato ordine
+    </div>
+
+    <select
+      value={filtroStatoEvasione}
+      onChange={(e) => setFiltroStatoEvasione(e.target.value)}
+      style={{
+        width: "220px",
+        padding: "10px 12px",
+        border: "1px solid #cbd5e1",
+        borderRadius: "8px",
+        fontSize: "14px",
+        boxSizing: "border-box",
+      }}
+    >
+      <option value="Tutti">Tutti gli stati</option>
+      <option value="Da evadere">Da evadere</option>
+      <option value="Evaso">Evaso</option>
+    </select>
+  </div>
+</div>
+        {ricambiAccessori.filter((r) => !r.archiviato).length === 0 ? (
+          <div
+            style={{
+              padding: "30px",
+              textAlign: "center",
+              color: "#94a3b8",
+              border: "1px dashed #cbd5e1",
+              borderRadius: "10px",
+            }}
+          >
+            Nessun ricambio o accessorio da consegnare
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: "10px" }}>
+            <div
+              style={{
+  display: "grid",
+  gridTemplateColumns:
+    "140px 1.5fr 120px 120px 130px 120px 150px 300px",
+  gap: "12px",
+  padding: "0 14px 8px",
+  fontSize: "12px",
+  fontWeight: "800",
+  color: "#64748b",
+  textTransform: "uppercase",
+  textAlign: "center",
+}}
+            >
+              <div>N. ordine</div>
+<div>Cliente</div>
+<div>Tipo ordine</div>
+<div>Stato ordine</div>
+<div>Data</div>
+<div>Stato</div>
+<div>Pagamento</div>
+<div>Azioni</div>
+            </div>
+
+            {ricambiAccessori
+              .filter((ricambio) => {
+  if (ricambio.archiviato) return false;
+
+  const testo = ricercaOrdini.trim().toLowerCase();
+
+  const corrispondeRicerca =
+  !testo ||
+  String(ricambio.id || "").toLowerCase().includes(testo) ||
+  String(ricambio.cliente || "").toLowerCase().includes(testo) ||
+  String(ricambio.telefono || "").toLowerCase().includes(testo);
+
+const corrispondeTipo =
+  filtroTipoOrdine === "Tutti" ||
+  (ricambio.tipoOrdine || "Negozio") === filtroTipoOrdine;
+
+const corrispondeStatoEvasione =
+  filtroStatoEvasione === "Tutti" ||
+  (ricambio.statoEvasione || "Da evadere") === filtroStatoEvasione;
+
+return (
+  corrispondeRicerca &&
+  corrispondeTipo &&
+  corrispondeStatoEvasione
+);
+})
+              .map((ricambio) => (
+                <div
+                  key={ricambio.firebaseId}
+                  style={{
+                    display: "grid",
+                   gridTemplateColumns:
+  "140px 1.5fr 120px 120px 130px 120px 150px 300px",
+                    gap: "12px",
+                    alignItems: "center",
+                    padding: "14px",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                  }}
+                >
+                  <div>
+  <strong>{ricambio.id || "-"}</strong>
+</div>
+                  <div>
+                    <strong>{ricambio.cliente || "-"}</strong>
+
+                    <div
+                      style={{
+                        marginTop: "3px",
+                        fontSize: "12px",
+                        color: "#64748b",
+                      }}
+                    >
+                      {ricambio.telefono || "-"}
+                    </div>
+                  </div>
+<div>
+  <strong>{ricambio.tipoOrdine || "Negozio"}</strong>
+</div>
+<div>
+  <strong
+    style={{
+      color:
+        (ricambio.statoEvasione || "Da evadere") === "Da evadere"
+          ? "#dc2626"
+          : "inherit",
+    }}
+  >
+    {ricambio.statoEvasione || "Da evadere"}
+  </strong>
+</div>
+                    <div>
+  {ricambio.dataCreazioneOrdine
+    ? new Date(
+        ricambio.dataCreazioneOrdine + "T00:00:00"
+      ).toLocaleDateString("it-IT")
+    : "-"}
+</div>
+
+                  <div>
+  <strong>
+  {(() => {
+    const righe = ricambio.ricambiDettaglio || [];
+
+    if (righe.length === 0) return "-";
+
+    const tuttiDisponibili = righe.every((r) => r.disponibile);
+    const tuttiDaOrdinare = righe.every((r) => r.daOrdinare);
+    const tuttiOrdinati = righe.every((r) => r.ordinato);
+
+    if (tuttiOrdinati) return "Ordinato";
+    if (tuttiDisponibili) return "Disponibile";
+    if (tuttiDaOrdinare) return "Da ordinare";
+
+    return "Parziale";
+  })()}
+</strong>
+</div>
+
+                  <div>
+                    {ricambio.pagamento || "Da pagare"}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="clientBtn"
+                      style={{
+                        background: "#2563eb",
+                        color: "white",
+                      }}
+                      onClick={() => {
+                        setFormRicambio({
+                          ...nuovoRicambioVuoto(),
+                          ...ricambio,
+                        });
+
+                        setRicambioInModifica(ricambio.firebaseId);
+                        setMostraFormRicambio(true);
+                      }}
+                    >
+                      Modifica
+                    </button>
+
+                    <button
+                      type="button"
+                      className="clientBtn"
+                      style={{
+                        background: "#475569",
+                        color: "white",
+                      }}
+                      onClick={async () => {
+                        const conferma = confirm(
+  "Vuoi archiviare questo ordine?"
+);
+
+                        if (!conferma) return;
+
+                        await updateDoc(
+                          doc(
+                            db,
+                            "ricambiAccessori",
+                            ricambio.firebaseId
+                          ),
+                          {
+                            archiviato: true,
+                            archiviatoIl: new Date().toISOString(),
+                          }
+                        );
+                      }}
+                    >
+                      Archivia
+</button>
+<button
+  type="button"
+  className="clientBtn"
+  style={{
+    background: "#0f766e",
+    color: "white",
+  }}
+  onClick={() => generaOrdinePDF(ricambio)}
+>
+  PDF
+</button>
+<button
+  type="button"
+  className="clientBtn"
+  style={{
+    background: "#dc2626",
+    color: "white",
+  }}
+  onClick={async () => {
+    const conferma = confirm(
+      `Vuoi eliminare definitivamente l'ordine ${ricambio.id || ""}?`
+    );
+
+    if (!conferma) return;
+
+    await deleteDoc(
+      doc(
+        db,
+        "ricambiAccessori",
+        ricambio.firebaseId
+      )
+    );
+
+    alert("Ordine eliminato");
+  }}
+>
+  Elimina
+</button>
+
+</div>
+
+</div>
+))}
+          </div>
+        )}
+      </>
+    )}
+  </section>
+)}
   {sezione === "scuola" && vista === "allievi" && (
   <section
     style={{
@@ -7652,7 +9836,16 @@ width: "100%",
     marginBottom: "16px",
   }}
 >
-  <strong>Ricambi / materiali</strong>
+  <strong
+  style={{
+    display: "block",
+    textAlign: "center",
+    fontSize: "18px",
+    marginBottom: "10px",
+  }}
+>
+  Ricambi / materiali
+</strong>
 
   {(form.ricambiDettaglio || []).map((ricambio, index) => (
     <div
