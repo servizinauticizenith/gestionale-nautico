@@ -3106,6 +3106,136 @@ async function archiviaLavoro(lavoro) {
     alert("Errore durante l'archiviazione del lavoro.");
   }
 }
+function aggiungiAGoogleCalendar(elemento, tipo = "lavoro") {
+  const calendarioId =
+    "f7a72fbc8abda478d52b89833d4478ff8072b6f4ccefe5cafd7780efaca2f833@group.calendar.google.com";
+
+  if (tipo === "rimessaggio") {
+    let data = "";
+    let titolo = "";
+    let descrizione = "";
+
+    if (elemento.statoBarca === "Da recuperare") {
+      data = elemento.dataRitiro;
+
+      if (!data) {
+        alert("Inserisci la data ritiro.");
+        return;
+      }
+
+      titolo =
+        `RITIRO - ${elemento.cliente || ""} - ${elemento.barca || ""}`;
+
+      descrizione = [
+        elemento.cliente
+          ? `Nome e cognome: ${elemento.cliente}`
+          : "",
+        elemento.barca
+          ? `Barca: ${elemento.barca}`
+          : "",
+        elemento.motore
+          ? `Motore: ${elemento.motore}`
+          : "",
+        elemento.dataRitiro
+          ? `Data ritiro: ${elemento.dataRitiro}`
+          : "",
+        elemento.luogoRitiro
+          ? `Luogo ritiro: ${elemento.luogoRitiro}`
+          : "",
+        `Carrello: ${elemento.carrello || "No"}`,
+        elemento.carrello === "Sì" && elemento.targaCarrello
+          ? `Targa carrello: ${elemento.targaCarrello}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    else if (elemento.statoBarca === "Da consegnare") {
+      data = elemento.dataConsegna;
+
+      if (!data) {
+        alert("Inserisci la data consegna.");
+        return;
+      }
+
+      titolo =
+        `CONSEGNA - ${elemento.cliente || ""} - ${elemento.barca || ""}`;
+
+      descrizione = [
+        elemento.cliente
+          ? `Nome e cognome: ${elemento.cliente}`
+          : "",
+        elemento.barca
+          ? `Barca: ${elemento.barca}`
+          : "",
+        elemento.motore
+          ? `Motore: ${elemento.motore}`
+          : "",
+        `Chiavi: ${elemento.chiavi || "No"}`,
+        `Cuscini: ${elemento.cuscini || "No"}`,
+        elemento.luogoConsegna
+          ? `Luogo consegna: ${elemento.luogoConsegna}`
+          : "",
+        elemento.dataConsegna
+          ? `Data consegna: ${elemento.dataConsegna}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    else {
+      alert(
+        'Imposta lo stato barca su "Da recuperare" oppure "Da consegnare".'
+      );
+      return;
+    }
+
+    const dataCalendar = data.replaceAll("-", "");
+
+    const url =
+      "https://calendar.google.com/calendar/render?action=TEMPLATE" +
+      `&text=${encodeURIComponent(titolo)}` +
+      `&dates=${dataCalendar}/${dataCalendar}` +
+      `&details=${encodeURIComponent(descrizione)}` +
+      `&src=${encodeURIComponent(calendarioId)}`;
+
+    window.open(url, "_blank");
+    return;
+  }
+
+  const data = elemento.consegna || elemento.ingresso;
+
+  if (!data) {
+    alert("Prima inserisci una data.");
+    return;
+  }
+
+  const dataCalendar = data.replaceAll("-", "");
+
+  const titolo = `Lavoro - ${elemento.cliente || ""}`;
+
+  const descrizione = [
+    elemento.id ? `Scheda: ${elemento.id}` : "",
+    elemento.barca ? `Barca: ${elemento.barca}` : "",
+    elemento.motore ? `Motore: ${elemento.motore}` : "",
+    elemento.matricola ? `Matricola: ${elemento.matricola}` : "",
+    elemento.lavoro ? `Lavoro: ${elemento.lavoro}` : "",
+    elemento.note ? `Note: ${elemento.note}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const url =
+    "https://calendar.google.com/calendar/render?action=TEMPLATE" +
+    `&text=${encodeURIComponent(titolo)}` +
+    `&dates=${dataCalendar}/${dataCalendar}` +
+    `&details=${encodeURIComponent(descrizione)}` +
+    `&src=${encodeURIComponent(calendarioId)}`;
+
+  window.open(url, "_blank");
+}
   async function eliminaLavoro(firebaseId) {
   const conferma = window.confirm(
     "Vuoi eliminare questo lavoro?"
@@ -4283,30 +4413,10 @@ if (ordinaClientiPerSaldo) {
 )}
 {stampaElencoRimessaggi && (
   <ElencoRimessaggiStampabile
-    rimessaggi={rimessaggi.filter((r) => {
-      const pagamento = r.pagamento || "Da pagare";
-
-      const matchPagamento =
-        filtroPagamentoRimessaggi === "Tutti" ||
-        (
-          filtroPagamentoRimessaggi === "Da pagare" &&
-          (
-            pagamento === "Da pagare" ||
-            pagamento === "Non pagato"
-          )
-        ) ||
-        pagamento === filtroPagamentoRimessaggi;
-
-      const annoRimessaggio = r.ingresso
-        ? new Date(r.ingresso).getFullYear().toString()
-        : "";
-
-      const matchAnno =
-        filtroAnnoRimessaggi === "Tutti" ||
-        annoRimessaggio === filtroAnnoRimessaggi;
-
-      return matchPagamento && matchAnno;
-    })}
+    rimessaggi={rimessaggiFiltrati}
+    filtroAnno={filtroAnnoRimessaggi}
+    filtroPagamento={filtroPagamentoRimessaggi}
+    filtroStato={filtroStatoBarcaRimessaggi}
   />
 )}
 {rimessaggioDaStampare && (
@@ -5603,42 +5713,92 @@ left: "250px",
         alignItems: "center",
       }}
         >
-      <select
-        value={filtroAnnoRimessaggi}
-        onChange={(e) =>
-          setFiltroAnnoRimessaggi(e.target.value)
-        }
-      >
-        <option value="Tutti">Tutti gli anni</option>
-        <option value="2026">2026</option>
-        <option value="2025">2025</option>
-        <option value="2024">2024</option>
-      </select>
+          <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  }}
+>
+  <div
+    style={{
+      fontSize: "12px",
+      fontWeight: "700",
+    }}
+  >
+    Anno
+  </div>
 
-      <select
-  value={filtroPagamentoRimessaggi}
-  onChange={(e) =>
-    setFiltroPagamentoRimessaggi(e.target.value)
-  }
+  <select
+    value={filtroAnnoRimessaggi}
+    onChange={(e) =>
+      setFiltroAnnoRimessaggi(e.target.value)
+    }
+  >
+    <option value="Tutti">Tutti gli anni</option>
+    <option value="2026">2026</option>
+    <option value="2025">2025</option>
+    <option value="2024">2024</option>
+  </select>
+</div>
+
+      <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  }}
 >
-  <option value="Tutti">Tutti</option>
-  <option value="Da pagare">Da pagare</option>
-  <option value="Pagato">Pagato</option>
-  <option value="Fatturato">Fatturato</option>
-</select>
-<select
-  value={filtroStatoBarcaRimessaggi}
-  onChange={(e) =>
-    setFiltroStatoBarcaRimessaggi(e.target.value)
-  }
+  <div
+    style={{
+      fontSize: "12px",
+      fontWeight: "700",
+    }}
+  >
+    Pagamento
+  </div>
+
+  <select
+    value={filtroPagamentoRimessaggi}
+    onChange={(e) =>
+      setFiltroPagamentoRimessaggi(e.target.value)
+    }
+  >
+    <option value="Tutti">Tutti</option>
+    <option value="Da pagare">Da pagare</option>
+    <option value="Pagato">Pagato</option>
+    <option value="Fatturato">Fatturato</option>
+  </select>
+</div>
+<div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  }}
 >
-  <option value="Tutti">Tutte le barche</option>
-  <option value="Da recuperare">Da recuperare</option>
-  <option value="In cantiere">In cantiere</option>
-  <option value="Consegnata">
-    Cosegnata
-  </option>
-</select>
+  <div
+    style={{
+      fontSize: "12px",
+      fontWeight: "700",
+    }}
+  >
+    Stato barca
+  </div>
+
+  <select
+    value={filtroStatoBarcaRimessaggi}
+    onChange={(e) =>
+      setFiltroStatoBarcaRimessaggi(e.target.value)
+    }
+  >
+    <option value="Tutti">Tutte le barche</option>
+    <option value="Da recuperare">Da recuperare</option>
+    <option value="In cantiere">In cantiere</option>
+    <option value="Da consegnare">Da consegnare</option>
+    <option value="Consegnata">Consegnata</option>
+  </select>
+</div>
 
 <button
   style={{ marginLeft: "10px" }}
@@ -9756,17 +9916,7 @@ width: "100%",
       })
     }
   />
-  <Input
-  label="Ingresso"
-  type="date"
-  value={form.ingresso || ""}
-  onChange={(v) =>
-    setForm({
-      ...form,
-      ingresso: v,
-    })
-  }
-/>
+  
 </div>
 
 <div
@@ -11550,9 +11700,8 @@ const saldoTotaleCliente =
     <div
   style={{
     display: "grid",
-    gridTemplateColumns: "1.2fr 1fr 1fr 1fr",
+    gridTemplateColumns: "1fr 1fr 1fr 1fr",
     gap: "12px",
-    alignItems: "end",
   }}
 >
   <label>
@@ -11561,7 +11710,6 @@ const saldoTotaleCliente =
     <input
       type="text"
       list="clientiListRimessaggi"
-      placeholder="Nome cliente..."
       value={ricercaClienteRimessaggio}
       onChange={(e) => {
         const valore = e.target.value;
@@ -11570,18 +11718,18 @@ const saldoTotaleCliente =
 
         const cliente = clientiDb.find(
           (c) =>
-            (c.cliente || "").trim().toLowerCase() ===
-            valore.trim().toLowerCase()
+            (c.cliente || "").toLowerCase() ===
+            valore.toLowerCase()
         );
 
-        if (cliente && valore.trim().length > 1) {
+        if (cliente) {
           setForm({
             ...form,
             cliente: cliente.cliente || "",
             telefono: cliente.telefono || "",
-            matricola: cliente.matricola || "",
             barca: cliente.barca || "",
             motore: cliente.motore || "",
+            matricola: cliente.matricola || "",
           });
 
           setRicercaClienteRimessaggio("");
@@ -11631,17 +11779,28 @@ const saldoTotaleCliente =
       })
     }
   />
+
+  <div
+    style={{
+      gridColumn: "1 / -1",
+      borderTop: "2px solid #dc2626",
+      margin: "18px 0 6px",
+      width: "100%",
+    }}
+  />
 </div>
 
 <div
   style={{
     display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
+    gridTemplateColumns:
+      "130px 150px 130px 150px 130px 130px 180px 147px 140px 140px",
     gap: "12px",
+    alignItems: "end",
   }}
 >
   <Input
-    label="Data ritiro prevista"
+    label="Data ritiro"
     type="date"
     value={form.dataRitiro || ""}
     onChange={(v) =>
@@ -11676,63 +11835,7 @@ const saldoTotaleCliente =
       })
     }
   />
-</div>
 
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
-    gap: "12px",
-  }}
->
-  <Input
-    label="Data ingresso"
-    type="date"
-    value={form.ingresso || ""}
-    onChange={(v) =>
-      setForm({
-        ...form,
-        ingresso: v,
-      })
-    }
-  />
-
-  <Input
-    label="Data uscita"
-    type="date"
-    value={form.uscita || ""}
-    onChange={(v) =>
-      setForm({
-        ...form,
-        uscita: v,
-      })
-    }
-  />
-
-  <Select
-    label="Stato barca"
-    value={form.statoBarca || "Da recuperare"}
-    options={[
-      "Da recuperare",
-      "In cantiere",
-      "Consegnata",
-    ]}
-    onChange={(v) =>
-      setForm({
-        ...form,
-        statoBarca: v,
-      })
-    }
-  />
-</div>
-
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr 1fr",
-    gap: "12px",
-  }}
->
   <Input
     label="Targa carrello"
     value={form.targaCarrello || ""}
@@ -11767,6 +11870,7 @@ const saldoTotaleCliente =
       })
     }
   />
+
   <Select
   label="Copertura"
   value={form.copertura || ""}
@@ -11781,9 +11885,75 @@ const saldoTotaleCliente =
     })
   }
 />
+<div
+  style={{
+    gridColumn: "8",
+    borderLeft: "2px solid #dc2626",
+    paddingLeft: "12px",
+  }}
+  >
+    <div style={{ gridColumn: "9" }}>
+  
+</div>
+  <Select
+    label="Stato barca"
+    value={form.statoBarca || "Da recuperare"}
+    options={[
+      "Da recuperare",
+      "In cantiere",
+      "Da consegnare",
+      "Consegnata",
+    ]}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        statoBarca: v,
+      })
+    }
+  />
+</div>
+<Input
+  label="Luogo consegna"
+  value={form.luogoConsegna || ""}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      luogoConsegna: v,
+    })
+  }
+/>
+<div style={{ gridColumn: "10" }}>
+  <Input
+    label="Data consegna"
+    type="date"
+    value={form.dataConsegna || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        dataConsegna: v,
+      })
+    }
+  />
+</div>
 </div>
 
-
+<div
+  style={{
+    borderTop: "2px solid #dc2626",
+    margin: "18px 0",
+    width: "100%",
+  }}
+/>
+<h3
+  style={{
+    textAlign: "center",
+    margin: "4px 0 16px",
+    fontSize: "18px",
+    fontWeight: "700",
+  }}
+>
+  Dati economici
+</h3>
 <div
   style={{
     display: "grid",
@@ -11991,51 +12161,59 @@ const saldoTotaleCliente =
   )}
 </span>
 
-<span
+<div
   style={{
     fontSize: "13px",
-    color: "#666",
+    color: "#111827",
     whiteSpace: "nowrap",
   }}
 >
-  Ingresso: {formatData(rimessaggio.ingresso)}
-</span>
+  {(rimessaggio.statoBarca || "Da recuperare") === "Da recuperare" && (
+    <>
+      Ritiro:{" "}
+      <strong>
+        {rimessaggio.dataRitiro
+          ? formatData(rimessaggio.dataRitiro)
+          : "-"}
+      </strong>
+    </>
+  )}
 
-<span
-  style={{
-    fontSize: "13px",
-    color: "#666",
-    whiteSpace: "nowrap",
-    paddingLeft: "22px",
-  }}
->
-  Uscita: {formatData(rimessaggio.uscita)}
-</span>
+  {(rimessaggio.statoBarca || "") === "In cantiere" && (
+    <>
+      Ritiro:{" "}
+      <strong>
+        {rimessaggio.dataRitiro
+          ? formatData(rimessaggio.dataRitiro)
+          : "-"}
+      </strong>
+    </>
+  )}
+
+  {(rimessaggio.statoBarca || "") === "Da consegnare" && (
+    <>
+      Consegna:{" "}
+      <strong>
+        {rimessaggio.dataConsegna
+          ? formatData(rimessaggio.dataConsegna)
+          : "-"}
+      </strong>
+    </>
+  )}
+
+  {(rimessaggio.statoBarca || "") === "Consegnata" && (
+    <>
+      Consegna:{" "}
+      <strong>
+        {rimessaggio.dataConsegna
+          ? formatData(rimessaggio.dataConsegna)
+          : "-"}
+      </strong>
+    </>
+  )}
+</div>
       </div>
-{(rimessaggio.statoBarca || "Da recuperare") === "Da recuperare" && (
-  <div
-    style={{
-      marginTop: "6px",
-      fontSize: "12px",
-      color: "#64748b",
-      paddingLeft: "4px",
-    }}
-  >
-    Ritiro previsto:{" "}
-    <strong>
-      {rimessaggio.dataRitiro
-        ? formatData(rimessaggio.dataRitiro)
-        : "Data non indicata"}
-    </strong>
 
-    {" — "}
-
-    Luogo:{" "}
-    <strong>
-      {rimessaggio.luogoRitiro || "Non indicato"}
-    </strong>
-  </div>
-)}
       <div
   className="actions"
   style={{
@@ -12069,7 +12247,6 @@ const saldoTotaleCliente =
 
     setTimeout(() => {
       window.print();
-
       setRimessaggioDaStampare(null);
     }, 300);
   }}
@@ -12077,7 +12254,19 @@ const saldoTotaleCliente =
   PDF
 </button>
 
-        <button
+<button
+  type="button"
+  className="actionBtn"
+  onClick={() => aggiungiAGoogleCalendar(rimessaggio, "rimessaggio")}
+  style={{
+    background: "#16a34a",
+    color: "white",
+  }}
+>
+  📅 Calendario
+</button>
+
+<button
   type="button"
   className="actionBtn"
   onClick={() => archiviaRimessaggio(rimessaggio)}
@@ -12764,6 +12953,7 @@ function ElencoLavoriStampabile({ lavori }) {
 function RimessaggioStampabile({ rimessaggio }) {
   return (
     <div className="printArea">
+      
       <div className="printHeader">
         <div className="printLogoArea">
           <img
@@ -12821,49 +13011,102 @@ function RimessaggioStampabile({ rimessaggio }) {
       </div>
 
       <div className="printSection">
-        <h2>Dati rimessaggio</h2>
+  <h2
+    style={{
+      textAlign: "center",
+      marginBottom: "14px",
+    }}
+  >
+    Dati rimessaggio
+  </h2>
 
-        <p>
-          <strong>Ingresso:</strong>{" "}
-          {formatData(rimessaggio.ingresso)}
-        </p>
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: "0",
+    }}
+  >
+    {/* COLONNA SINISTRA */}
+    <div
+      style={{
+        paddingRight: "24px",
+        borderRight: "1px solid #94a3b8",
+      }}
+    >
+      <p>
+        <strong>Data ritiro:</strong>{" "}
+        {rimessaggio.dataRitiro
+          ? formatData(rimessaggio.dataRitiro)
+          : "-"}
+      </p>
 
-        <p>
-          <strong>Uscita:</strong>{" "}
-          {formatData(rimessaggio.uscita)}
-        </p>
-{rimessaggio.carrello === "Sì" && (
-  <>
-    <p>
-      <strong>Carrello:</strong>{" "}
-      Sì
-    </p>
+      <p>
+        <strong>Luogo ritiro:</strong>{" "}
+        {rimessaggio.luogoRitiro || "-"}
+      </p>
 
-    <p>
-      <strong>Targa carrello:</strong>{" "}
-      {rimessaggio.targaCarrello || "-"}
-    </p>
-  </>
-)}
-<p>
-  <strong>Chiavi:</strong>{" "}
-  {rimessaggio.chiavi || "No"}
-</p>
+      <p>
+        <strong>Carrello:</strong>{" "}
+        {rimessaggio.carrello || "No"}
+      </p>
 
-<p>
-  <strong>Cuscini:</strong>{" "}
-  {rimessaggio.cuscini || "No"}
-</p>
-        <p>
-          <strong>Copertura:</strong>{" "}
-          {rimessaggio.copertura || "-"}
-        </p>
+      <p>
+        <strong>Targa carrello:</strong>{" "}
+        {rimessaggio.targaCarrello || "-"}
+      </p>
 
-        <p>
-          <strong>Pagamento:</strong>{" "}
-          {rimessaggio.pagamento || "Da pagare"}
-        </p>
-      </div>
+      <p>
+        <strong>Chiavi:</strong>{" "}
+        {rimessaggio.chiavi || "No"}
+      </p>
+
+      <p>
+        <strong>Cuscini:</strong>{" "}
+        {rimessaggio.cuscini || "No"}
+      </p>
+    </div>
+
+    {/* COLONNA DESTRA */}
+    <div
+      style={{
+        paddingLeft: "24px",
+      }}
+    >
+      <p>
+        <strong>Copertura:</strong>{" "}
+        {rimessaggio.copertura || "-"}
+      </p>
+
+      <p>
+        <strong>Stato barca:</strong>{" "}
+        {rimessaggio.statoBarca || "Da recuperare"}
+      </p>
+
+      <p>
+        <strong>Luogo consegna:</strong>{" "}
+        {rimessaggio.luogoConsegna || "-"}
+      </p>
+
+      <p>
+        <strong>Data consegna:</strong>{" "}
+        {rimessaggio.dataConsegna
+          ? formatData(rimessaggio.dataConsegna)
+          : "-"}
+      </p>
+
+      <p>
+        <strong>Pagamento:</strong>{" "}
+        {rimessaggio.pagamento || "Da pagare"}
+      </p>
+
+      <p>
+        <strong>Note:</strong>{" "}
+        {rimessaggio.note || "-"}
+      </p>
+    </div>
+  </div>
+</div>
 
       <div className="printSection">
         <div className="priceRows">
@@ -12925,58 +13168,150 @@ function RimessaggioStampabile({ rimessaggio }) {
     </div>
   );
 }
-function ElencoRimessaggiStampabile({ rimessaggi }) {
+function ElencoRimessaggiStampabile({
+  rimessaggi,
+  filtroAnno,
+  filtroPagamento,
+  filtroStato,
+}) {
   return (
     <div className="printArea">
+      
+      <style>
+  {`
+    @media print {
+      @page {
+        size: A4 landscape;
+        margin: 10mm;
+      }
+    }
+  `}
+</style>
       <div className="printHeader">
-        <h1>Servizi Nautici Zenith</h1>
-        <h2>Elenco Rimessaggi</h2>
-      </div>
+  <h1>Servizi Nautici Zenith</h1>
 
+  <div
+    style={{
+      textAlign: "right",
+    }}
+  >
+    <h2
+      style={{
+        margin: 0,
+      }}
+    >
+      Elenco Rimessaggi
+    </h2>
+
+    <div
+  style={{
+    marginTop: "4px",
+    fontSize: "12px",
+    fontWeight: "600",
+    color: "#475569",
+  }}
+>
+  <div>
+  <strong>Anno:</strong>{" "}
+  {filtroAnno || "Tutti gli anni"}
+</div>
+
+<div>
+  <strong>Pagamento:</strong>{" "}
+  {filtroPagamento || "Tutti"}
+</div>
+
+<div>
+  <strong>Stato barca:</strong>{" "}
+  {filtroStato || "Tutte le barche"}
+</div>
+</div>
+  </div>
+</div>
       <table
         style={{
           width: "100%",
           borderCollapse: "collapse",
           marginTop: "20px",
+          fontSize: "11px",
         }}
       >
         <thead>
-  <tr>
-    <th style={{ border: "1px solid #000", padding: "8px" }}>
-      Cliente
-    </th>
-    <th style={{ border: "1px solid #000", padding: "8px" }}>
-      Imbarcazione
-    </th>
-    <th style={{ border: "1px solid #000", padding: "8px" }}>
-      Telefono
-    </th>
-    <th style={{ border: "1px solid #000", padding: "8px" }}>
-      Pagamento
-    </th>
-  </tr>
-</thead>
+          <tr>
+            <th style={{ border: "1px solid #000", padding: "6px" }}>
+              Cliente
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "6px" }}>
+              Imbarcazione
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "6px" }}>
+              Stato barca
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "6px" }}>
+              Data ritiro
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "6px" }}>
+              Luogo ritiro
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "6px" }}>
+              Data consegna
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "6px" }}>
+              Luogo consegna
+            </th>
+
+            <th style={{ border: "1px solid #000", padding: "6px" }}>
+              Pagamento
+            </th>
+          </tr>
+        </thead>
 
         <tbody>
-         {rimessaggi.map((r) => (
-  <tr key={r.firebaseId}>
-    <td style={{ border: "1px solid #000", padding: "6px" }}>
-      {r.cliente}
-    </td>
+          {rimessaggi.map((r) => (
+            <tr key={r.firebaseId}>
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {r.cliente || "-"}
+              </td>
 
-    <td style={{ border: "1px solid #000", padding: "6px" }}>
-      {r.barca}
-    </td>
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {r.barca || "-"}
+              </td>
 
-    <td style={{ border: "1px solid #000", padding: "6px" }}>
-      {r.telefono}
-    </td>
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {r.statoBarca || "Da recuperare"}
+              </td>
 
-    <td style={{ border: "1px solid #000", padding: "6px" }}>
-      {r.pagamento}
-    </td>
-  </tr>
-))}
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {r.dataRitiro
+                  ? formatData(r.dataRitiro)
+                  : "-"}
+              </td>
+
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {r.luogoRitiro || "-"}
+              </td>
+
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {r.dataConsegna
+                  ? formatData(r.dataConsegna)
+                  : "-"}
+              </td>
+
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {r.luogoConsegna || "-"}
+              </td>
+
+              <td style={{ border: "1px solid #000", padding: "6px" }}>
+                {r.pagamento || "Da pagare"}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
 
