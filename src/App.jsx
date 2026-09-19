@@ -38,17 +38,13 @@ function nuovoLavoroVuoto() {
     interventiEseguiti: "",
     stato: "In lavorazione",
     priorita: "Normale",
-    tecnico: "",
-    ingresso: new Date().toISOString().slice(0, 10),
-    consegna: "",
-    ricambi: "",
-    ricambiDettaglio: [],
-    costoRicambi: "",
-    oreManodopera: "",
-    prezzoOra: "60",
-    altro: "",
-altriCosti: "",
-    acconto: "",
+ingresso: new Date().toISOString().slice(0, 10),
+consegna: "",
+ricambi: "",
+ricambiDettaglio: [],
+costoRicambi: "",
+altro: "",
+acconto: "",
     pagamento: "Non pagato",
     archiviato: false,
     note: "",
@@ -83,12 +79,9 @@ function nuovoPreventivoVuoto() {
   titolo: "",
   descrizione: "",
   ricambiDettaglio: [],
-  costoRicambi: "",
-  oreManodopera: "",
-  prezzoOra: "60",
-  rimessaggio: "",
-  altro: "",
-  stato: "Da preparare",
+costoRicambi: "",
+rimessaggio: "",
+stato: "Da preparare",
   note: "",
 };
 }
@@ -115,6 +108,7 @@ const [mostraFormRicambio, setMostraFormRicambio] = useState(false);
   const [mostraFormRimessaggio, setMostraFormRimessaggio] = useState(false);
   const [formPreventivo, setFormPreventivo] = useState(nuovoPreventivoVuoto());
   const [ricercaClientePreventivo, setRicercaClientePreventivo] = useState("");
+  const [ricercaClienteRimessaggio, setRicercaClienteRimessaggio] = useState("");
   const [ricercaOrdini, setRicercaOrdini] = useState("");
   const [filtroTipoOrdine, setFiltroTipoOrdine] = useState("Tutti");
   const [filtroStatoEvasione, setFiltroStatoEvasione] = useState("Tutti");
@@ -3252,7 +3246,7 @@ function pulisciHtml(testo) {
 }
  function stampaPreventivo(preventivo) {
   const totale = calcolaTotale(preventivo);
-  const manodopera = numero(preventivo.oreManodopera) * numero(preventivo.prezzoOra);
+
 
   const iframe = document.createElement("iframe");
 
@@ -3650,18 +3644,8 @@ padding-top: 10px;
 </div>
 
     <div>
-      <span>Manodopera (${preventivo.oreManodopera || 0} h × ${euro(preventivo.prezzoOra || 0)})</span>
-      <strong>${euro(manodopera)}</strong>
-    </div>
-
-    <div>
   <span>Rimessaggio</span>
   <strong>${euro(preventivo.rimessaggio || 0)}</strong>
-</div>
-
-<div>
-  <span>Altri costi</span>
-  <strong>${euro(preventivo.altro || 0)}</strong>
 </div>
 
     <div class="total">
@@ -3784,11 +3768,7 @@ telefono:
 
       ricambiDettaglio: preventivo.ricambiDettaglio || [],
       costoRicambi: String(costoRicambi),
-
-      oreManodopera: preventivo.oreManodopera || "",
-      prezzoOra: preventivo.prezzoOra || "60",
       altro: preventivo.rimessaggio || "",
-altriCosti: preventivo.altro || "",
 
       note: preventivo.note || "",
 
@@ -4067,10 +4047,9 @@ totaleRimessaggiDaIncassare: rimessaggi
     (l) => (l.pagamento || "Non pagato") === "Non pagato"
   )
   .reduce((totale, l) => {
-    const totaleLavoro =
-      numero(l.costoRicambi) +
-      numero(l.oreManodopera) * numero(l.prezzoOra) +
-      numero(l.altro);
+  const totaleLavoro =
+    numero(l.costoRicambi) +
+    numero(l.altro);
 
     const saldo =
       totaleLavoro - numero(l.acconto);
@@ -4214,10 +4193,9 @@ if (ordinaClientiPerSaldo) {
           return totale;
         }
 
-        const totaleLavoro =
-          numero(lavoro.costoRicambi) +
-          numero(lavoro.oreManodopera) * numero(lavoro.prezzoOra) +
-          numero(lavoro.altro);
+       const totaleLavoro =
+  numero(lavoro.costoRicambi) +
+  numero(lavoro.altro);
 
         return totale + Math.max(
           0,
@@ -5702,18 +5680,18 @@ left: "250px",
 <main
   className="layout"
   style={{
-  gridTemplateColumns:
-    vista === "clienti" ||
-    vista === "incassi" ||
-    vista === "ricambiAccessori" ||
-    vista === "allievi" ||
-    vista === "incassiScuola" ||
-    (vista === "rimessaggi" && !mostraFormRimessaggio) ||
-    (vista === "lavori" && !mostraFormLavoro) ||
-    (vista === "preventivi" && !mostraFormPreventivo)
-      ? "1fr"
-      : "minmax(0, 1fr) minmax(620px, 1.35fr)",
-}}
+    gridTemplateColumns:
+      vista === "clienti" ||
+      vista === "incassi" ||
+      vista === "ricambiAccessori" ||
+      vista === "allievi" ||
+      vista === "incassiScuola" ||
+      vista === "rimessaggi" ||
+      vista === "lavori" ||
+      vista === "preventivi"
+        ? "1fr"
+        : "minmax(0, 1fr) minmax(620px, 1.35fr)",
+  }}
 >
   {sezione === "cantiere" && vista === "ricambiAccessori" && (
   <section
@@ -9706,7 +9684,14 @@ width: "100%",
     <h2>Nuovo lavoro</h2>
 
     <form onSubmit={aggiungiLavoro} className="form">
-    {!form.cliente && (
+    <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1.2fr 1fr 1fr 1fr",
+    gap: "12px",
+    alignItems: "end",
+  }}
+>
   <label>
     Cerca cliente registrato
 
@@ -9720,9 +9705,10 @@ width: "100%",
 
         setRicercaClienteLavoro(valore);
 
-       const cliente = clientiDb.find((c) =>
-  (c.cliente || "").toLowerCase() === valore.toLowerCase()
-);
+        const cliente = clientiDb.find(
+          (c) =>
+            (c.cliente || "").toLowerCase() === valore.toLowerCase()
+        );
 
         if (cliente && valore.trim().length > 1) {
           setForm({
@@ -9748,38 +9734,36 @@ width: "100%",
       ))}
     </datalist>
   </label>
-)}
 
-      <Input
-        label="Titolo lavoro"
-        value={form.titolo || ""}
-        onChange={(v) => setForm({ ...form, titolo: v })}
-      />
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "12px",
-  }}
->
- <Input
-  label="Cliente *"
-  value={form.cliente || ""}
+  <Input
+    label="Cliente *"
+    value={form.cliente || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        cliente: v,
+      })
+    }
+  />
+
+  <Input
+    label="Numero telefono"
+    value={form.telefono || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        telefono: v,
+      })
+    }
+  />
+  <Input
+  label="Ingresso"
+  type="date"
+  value={form.ingresso || ""}
   onChange={(v) =>
     setForm({
       ...form,
-      cliente: v,
-    })
-  }
-/>
-
-<Input
-  label="Telefono"
-  value={form.telefono || ""}
-  onChange={(v) =>
-    setForm({
-      ...form,
-      telefono: v,
+      ingresso: v,
     })
   }
 />
@@ -9788,45 +9772,85 @@ width: "100%",
 <div
   style={{
     display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
+    gridTemplateColumns: "1.4fr 1fr 1fr 1fr",
     gap: "12px",
   }}
 >
   <Input
+    label="Titolo lavoro"
+    value={form.titolo || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        titolo: v,
+      })
+    }
+  />
+
+  <Input
     label="Imbarcazione"
     value={form.barca || ""}
-    onChange={(v) => setForm({ ...form, barca: v })}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        barca: v,
+      })
+    }
   />
 
   <Input
     label="Motore"
     value={form.motore || ""}
-    onChange={(v) => setForm({ ...form, motore: v })}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        motore: v,
+      })
+    }
   />
 
   <Input
     label="Matricola"
     value={form.matricola || ""}
-    onChange={(v) => setForm({ ...form, matricola: v })}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        matricola: v,
+      })
+    }
   />
 </div>
 
-      <Textarea
-        label="Lavoro richiesto *"
-        value={form.lavoro || ""}
-        onChange={(v) => setForm({ ...form, lavoro: v })}
-      />
+      <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "12px",
+    width: "100%",
+  }}
+>
+  <Textarea
+    label="Lavoro richiesto *"
+    value={form.lavoro || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        lavoro: v,
+      })
+    }
+  />
 
-      <Textarea
-  label="Interventi eseguiti"
-  value={form.interventiEseguiti || ""}
-  onChange={(v) =>
-    setForm({
-      ...form,
-      interventiEseguiti: v,
-    })
-  }
-/>
+  <Textarea
+    label="Interventi eseguiti"
+    value={form.interventiEseguiti || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        interventiEseguiti: v,
+      })
+    }
+  />
+</div>
 
     <div
   style={{
@@ -9851,13 +9875,32 @@ width: "100%",
     <div
       key={index}
       style={{
-        display: "grid",
-        gridTemplateColumns: "2fr 90px 120px 120px 45px",
-        gap: "8px",
-        alignItems: "center",
-        marginTop: "10px",
-      }}
+  display: "grid",
+  gridTemplateColumns: "150px 260px 90px 120px 120px 45px",
+  gap: "8px",
+  alignItems: "center",
+  justifyContent: "center",
+  marginTop: "10px",
+}}
     >
+      <input
+  type="text"
+  placeholder="Codice"
+  value={ricambio.codice || ""}
+  onChange={(e) => {
+    const nuovi = [...(form.ricambiDettaglio || [])];
+
+    nuovi[index] = {
+      ...nuovi[index],
+      codice: e.target.value,
+    };
+
+    setForm({
+      ...form,
+      ricambiDettaglio: nuovi,
+    });
+  }}
+/>
       <input
         type="text"
         placeholder="Descrizione ricambio"
@@ -9963,83 +10006,53 @@ width: "100%",
 </div>
 
 <div className="twoCols">
+  <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: "12px",
+    width: "100%",
+  }}
+>
   <Input
-  label="Costo ricambi euro"
+    label="Costo ricambi euro"
+    type="number"
+    value={String(
+      (form.ricambiDettaglio || []).reduce(
+        (totale, ricambio) =>
+          totale +
+          numero(ricambio.quantita) *
+            numero(ricambio.prezzo),
+        0
+      )
+    )}
+    onChange={() => {}}
+    readOnly
+  />
+
+  <Input
+  label="Rimessaggio euro"
   type="number"
-  value={String(
-    (form.ricambiDettaglio || []).reduce(
-      (totale, ricambio) =>
-        totale +
-        numero(ricambio.quantita) *
-          numero(ricambio.prezzo),
-      0
-    )
-  )}
-  onChange={() => {}}
-  readOnly
+  value={form.altro || ""}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      altro: v,
+    })
+  }
 />
-
   <Input
-    label="Ore manodopera"
-    type="number"
-    value={form.oreManodopera || ""}
-    onChange={(v) =>
-      setForm({ ...form, oreManodopera: v })
-    }
-  />
+  label="Acconto euro"
+  type="number"
+  value={form.acconto || ""}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      acconto: v,
+    })
+  }
+/>
 </div>
-
-
-<div className="twoCols">
-  <Input
-    label="Costo ora euro"
-    type="number"
-    value={form.prezzoOra || ""}
-    onChange={(v) =>
-      setForm({
-        ...form,
-        prezzoOra: v,
-      })
-    }
-  />
-
-  <Input
-    label="Rimessaggio euro"
-    type="number"
-    value={form.altro || ""}
-    onChange={(v) =>
-      setForm({
-        ...form,
-        altro: v,
-      })
-    }
-  />
-</div>
-
-<div className="twoCols">
-  <Input
-    label="Altri costi euro"
-    type="number"
-    value={form.altriCosti || ""}
-    onChange={(v) =>
-      setForm({
-        ...form,
-        altriCosti: v,
-      })
-    }
-  />
-
-  <Input
-    label="Acconto euro"
-    type="number"
-    value={form.acconto || ""}
-    onChange={(v) =>
-      setForm({
-        ...form,
-        acconto: v,
-      })
-    }
-  />
 </div>
 <div
   className="totalBox"
@@ -10059,10 +10072,7 @@ width: "100%",
               numero(ricambio.prezzo),
           0
         ) +
-          numero(form.oreManodopera) *
-            numero(form.prezzoOra) +
-          numero(form.altro) +
-          numero(form.altriCosti) -
+          numero(form.altro) -
           numero(form.acconto)
       )
     )}
@@ -10079,54 +10089,50 @@ width: "100%",
             numero(ricambio.prezzo),
         0
       ) +
-        numero(form.oreManodopera) *
-          numero(form.prezzoOra) +
-        numero(form.altro) +
-        numero(form.altriCosti)
+        numero(form.altro)
     )}
   </strong>
 </div>
 
-<Select
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr 1fr",
+    gap: "12px",
+    width: "100%",
+  }}
+>
+  <Select
   label="Stato"
-        value={form.stato || ""}
-        options={stati}
-        onChange={(v) => setForm({ ...form, stato: v })}
-      />
-      <Select
+  value={form.stato || ""}
+  options={stati}
+  onChange={(v) =>
+    setForm({ ...form, stato: v })
+  }
+/>
+
+<Input
+  label="Consegna"
+  type="date"
+  value={form.consegna || ""}
+  onChange={(v) =>
+    setForm({ ...form, consegna: v })
+  }
+/>
+
+<Select
   label="Stato amministrativo"
   value={form.pagamento || "Non pagato"}
   options={[
     "Non pagato",
     "Pagato",
-    "Fatturato"
+    "Fatturato",
   ]}
   onChange={(v) =>
     setForm({ ...form, pagamento: v })
   }
 />
-
-      <Input
-        label="Tecnico"
-        value={form.tecnico || ""}
-        onChange={(v) => setForm({ ...form, tecnico: v })}
-      />
-
-      <div className="twoCols">
-        <Input
-          label="Ingresso"
-          type="date"
-          value={form.ingresso || ""}
-          onChange={(v) => setForm({ ...form, ingresso: v })}
-        />
-
-        <Input
-          label="Consegna"
-          type="date"
-          value={form.consegna || ""}
-          onChange={(v) => setForm({ ...form, consegna: v })}
-        />
-      </div>
+</div>
 
       <Textarea
         label="Note"
@@ -10319,13 +10325,11 @@ padding: "10px",
 >
   {euro(
   Math.max(
-    0,
-    numero(lavoro.costoRicambi) +
-      numero(lavoro.oreManodopera) * numero(lavoro.prezzoOra) +
-      numero(lavoro.altro) +
-      numero(lavoro.altriCosti) -
-      numero(lavoro.acconto)
-  )
+  0,
+  numero(lavoro.costoRicambi) +
+    numero(lavoro.altro) -
+    numero(lavoro.acconto)
+)
 )}
 </span>
 
@@ -10406,121 +10410,134 @@ padding: "10px",
 
               <form onSubmit={aggiungiPreventivo} className="form">
                 
-                <label>
-  Cerca cliente *
-  <input
-    type="text"
-    list="clientiListPreventivi"
-    placeholder="Scrivi nome, cognome, telefono, motore o matricola"
-    value={ricercaClientePreventivo}
-    onChange={(e) => {
-  const valore = e.target.value;
-  setRicercaClientePreventivo(valore);
+                
 
-  const cliente = clientiDb.find(
-  (c) =>
-    (c.cliente || "").trim().toLowerCase() ===
-    valore.trim().toLowerCase()
-);
-
-  if (cliente && valore.trim().length > 1) {
-    setFormPreventivo((prev) => ({
-      ...prev,
-      cliente: cliente.cliente || "",
-      telefono: cliente.telefono || "",
-      barca: cliente.barca || "",
-      motore: cliente.motore || "",
-      matricola: cliente.matricola || "",
-    }));
-  }
-}}
-  />
-
-  <datalist id="clientiListPreventivi">
-    {clientiDb.map((cliente) => (
-      <option
-        key={cliente.firebaseId}
-        value={cliente.cliente}
-      />
-    ))}
-  </datalist>
-</label>
 <div
-  className="twoCols"
   style={{
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "1.2fr 1fr 1fr",
+    gap: "12px",
+    alignItems: "end",
+    width: "100%",
+  }}
+>
+  <label>
+    Cerca cliente *
+
+    <input
+  type="text"
+  list="clientiListPreventivi"
+  placeholder="Scrivi nome, cognome, telefono, motore o matricola"
+  value={ricercaClientePreventivo}
+  onChange={(e) => {
+    const valore = e.target.value;
+
+    setRicercaClientePreventivo(valore);
+
+    const cliente = clientiDb.find(
+      (c) =>
+        (c.cliente || "").trim().toLowerCase() ===
+        valore.trim().toLowerCase()
+    );
+
+    if (cliente && valore.trim().length > 1) {
+      setFormPreventivo((prev) => ({
+        ...prev,
+        cliente: cliente.cliente || "",
+        telefono: cliente.telefono || "",
+        barca: cliente.barca || "",
+        motore: cliente.motore || "",
+        matricola: cliente.matricola || "",
+      }));
+    }
+  }}
+/>
+
+<datalist id="clientiListPreventivi">
+  {clientiDb.map((cliente) => (
+    <option
+      key={cliente.firebaseId}
+      value={cliente.cliente}
+    />
+  ))}
+</datalist>
+</label>
+
+  <Input
+    label="Cliente *"
+    value={formPreventivo.cliente || ""}
+    onChange={(v) =>
+      setFormPreventivo((prev) => ({
+        ...prev,
+        cliente: v,
+      }))
+    }
+  />
+
+  <Input
+    label="Numero telefono"
+    value={formPreventivo.telefono || ""}
+    onChange={(v) =>
+      setFormPreventivo((prev) => ({
+        ...prev,
+        telefono: v,
+      }))
+    }
+  />
+</div>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1.4fr 1fr 1fr 1fr",
     gap: "12px",
     width: "100%",
   }}
 >
   <Input
-  label="Cliente *"
-  value={formPreventivo.cliente || ""}
-  onChange={(v) =>
-    setFormPreventivo((prev) => ({
-      ...prev,
-      cliente: v,
-    }))
-  }
-/>
-
-<Input
-  label="Telefono"
-  value={formPreventivo.telefono || ""}
-  onChange={(v) =>
-    setFormPreventivo((prev) => ({
-      ...prev,
-      telefono: v,
-    }))
-  }
-/>
-</div>
-
-<div className="twoCols">
-  <Input
-  label="Imbarcazione"
-  value={formPreventivo.barca || ""}
-  onChange={(v) =>
-    setFormPreventivo({
-      ...formPreventivo,
-      barca: v,
-    })
-  }
-/>
+    label="Titolo preventivo"
+    value={formPreventivo.titolo || ""}
+    onChange={(v) =>
+      setFormPreventivo({
+        ...formPreventivo,
+        titolo: v,
+      })
+    }
+  />
 
   <Input
-  label="Motore"
-  value={formPreventivo.motore || ""}
-  onChange={(v) =>
-    setFormPreventivo({
-      ...formPreventivo,
-      motore: v,
-    })
-  }
-/>
-</div>
+    label="Imbarcazione"
+    value={formPreventivo.barca || ""}
+    onChange={(v) =>
+      setFormPreventivo({
+        ...formPreventivo,
+        barca: v,
+      })
+    }
+  />
 
-<Input
-  label="Matricola"
-  value={formPreventivo.matricola || ""}
-  onChange={(v) =>
-    setFormPreventivo({
-      ...formPreventivo,
-      matricola: v,
-    })
-  }
-/>
-<Input
-  label="Titolo preventivo"
-  value={formPreventivo.titolo || ""}
-  onChange={(v) =>
-    setFormPreventivo({
-      ...formPreventivo,
-      titolo: v,
-    })
-  }
-/>
+  <Input
+    label="Motore"
+    value={formPreventivo.motore || ""}
+    onChange={(v) =>
+      setFormPreventivo({
+        ...formPreventivo,
+        motore: v,
+      })
+    }
+  />
+
+  <Input
+    label="Matricola"
+    value={formPreventivo.matricola || ""}
+    onChange={(v) =>
+      setFormPreventivo({
+        ...formPreventivo,
+        matricola: v,
+      })
+    }
+  />
+</div>
 <Textarea
   label="Descrizione preventivo *"
   value={formPreventivo.descrizione || ""}
@@ -10543,15 +10560,34 @@ padding: "10px",
 
   {(formPreventivo.ricambiDettaglio || []).map((ricambio, index) => (
     <div
-      key={index}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "2fr 90px 120px 120px 45px",
-        gap: "8px",
-        alignItems: "center",
-        marginTop: "10px",
-      }}
-    >
+  key={index}
+  style={{
+    display: "grid",
+    gridTemplateColumns: "150px 260px 90px 120px 120px 45px",
+    gap: "8px",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: "10px",
+  }}
+>
+  <input
+  type="text"
+  placeholder="Codice"
+  value={ricambio.codice || ""}
+  onChange={(e) => {
+    const nuovi = [...(formPreventivo.ricambiDettaglio || [])];
+
+    nuovi[index] = {
+      ...nuovi[index],
+      codice: e.target.value,
+    };
+
+    setFormPreventivo({
+      ...formPreventivo,
+      ricambiDettaglio: nuovi,
+    });
+  }}
+/>
       <input
         type="text"
         placeholder="Descrizione ricambio"
@@ -10659,6 +10695,14 @@ padding: "10px",
   </button>
 </div>
 <div className="twoCols">
+  <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "12px",
+    width: "100%",
+  }}
+>
   <Input
     label="Costo ricambi euro"
     type="number"
@@ -10676,52 +10720,18 @@ padding: "10px",
   />
 
   <Input
-    label="Ore manodopera"
+    label="Rimessaggio euro"
     type="number"
-    value={formPreventivo.oreManodopera || ""}
+    value={formPreventivo.rimessaggio || ""}
     onChange={(v) =>
       setFormPreventivo({
         ...formPreventivo,
-        oreManodopera: v,
+        rimessaggio: v,
       })
     }
   />
 </div>
-
-<div className="twoCols">
-  <Input
-    label="Costo ora euro"
-    type="number"
-    value={formPreventivo.prezzoOra || ""}
-    onChange={(v) =>
-      setFormPreventivo({
-        ...formPreventivo,
-        prezzoOra: v,
-      })
-    }
-  />
-<Input
-  label="Rimessaggio euro"
-  type="number"
-  value={formPreventivo.rimessaggio || ""}
-  onChange={(v) =>
-    setFormPreventivo({
-      ...formPreventivo,
-      rimessaggio: v,
-    })
-  }
-/>
-  <Input
-    label="Altri costi euro"
-    type="number"
-    value={formPreventivo.altro || ""}
-    onChange={(v) =>
-      setFormPreventivo({
-        ...formPreventivo,
-        altro: v,
-      })
-    }
-  />
+  
 </div>
 
 <div className="totalBox">
@@ -10735,10 +10745,7 @@ padding: "10px",
             numero(ricambio.prezzo),
         0
       ) +
-        numero(formPreventivo.oreManodopera) *
-          numero(formPreventivo.prezzoOra) +
-        numero(formPreventivo.rimessaggio) +
-        numero(formPreventivo.altro)
+        numero(formPreventivo.rimessaggio)
     )}
   </strong>
 </div>
@@ -11156,9 +11163,8 @@ const saldoLavoriCliente = lavoriCliente.reduce((totale, lavoro) => {
   }
 
   const totaleLavoro =
-    numero(lavoro.costoRicambi) +
-    numero(lavoro.oreManodopera) * numero(lavoro.prezzoOra) +
-    numero(lavoro.altro);
+  numero(lavoro.costoRicambi) +
+  numero(lavoro.altro);
 
   const saldo =
     totaleLavoro - numero(lavoro.acconto);
@@ -11387,10 +11393,9 @@ const saldoTotaleCliente =
 <strong>{lavoro.titolo || "Senza titolo"}</strong>
 {" — "}
 <strong>
-  {euro(
-    numero(lavoro.costoRicambi) +
-      numero(lavoro.oreManodopera) * numero(lavoro.prezzoOra) +
-      numero(lavoro.altro)
+ {euro(
+  numero(lavoro.costoRicambi) +
+    numero(lavoro.altro)
   )}
 </strong>
 {" — "}
@@ -11542,135 +11547,192 @@ const saldoTotaleCliente =
 
     <form className="form">
 
-    <label>
-  Cerca cliente
+    <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1.2fr 1fr 1fr 1fr",
+    gap: "12px",
+    alignItems: "end",
+  }}
+>
+  <label>
+    Cerca cliente
 
-  <input
-    type="text"
-    list="clientiListRimessaggi"
-    placeholder="Nome cliente..."
+    <input
+      type="text"
+      list="clientiListRimessaggi"
+      placeholder="Nome cliente..."
+      value={ricercaClienteRimessaggio}
+      onChange={(e) => {
+        const valore = e.target.value;
+
+        setRicercaClienteRimessaggio(valore);
+
+        const cliente = clientiDb.find(
+          (c) =>
+            (c.cliente || "").trim().toLowerCase() ===
+            valore.trim().toLowerCase()
+        );
+
+        if (cliente && valore.trim().length > 1) {
+          setForm({
+            ...form,
+            cliente: cliente.cliente || "",
+            telefono: cliente.telefono || "",
+            matricola: cliente.matricola || "",
+            barca: cliente.barca || "",
+            motore: cliente.motore || "",
+          });
+
+          setRicercaClienteRimessaggio("");
+        }
+      }}
+    />
+
+    <datalist id="clientiListRimessaggi">
+      {clientiDb.map((cliente) => (
+        <option
+          key={cliente.firebaseId}
+          value={cliente.cliente}
+        />
+      ))}
+    </datalist>
+  </label>
+
+  <Input
+    label="Nome e cognome"
     value={form.cliente || ""}
-    onChange={(e) => {
-      const valore = e.target.value;
-
-      const cliente = clientiDb.find(
-        (c) => c.cliente === valore
-      );
-
-      if (cliente) {
-  setForm({
-    ...form,
-    cliente: cliente.cliente || "",
-    telefono: cliente.telefono || "",
-    matricola: cliente.matricola || "",
-    barca: cliente.barca || "",
-    motore: cliente.motore || "",
-  });
-} else {
-        setForm({
-          ...form,
-          cliente: valore,
-        });
-      }
-    }}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        cliente: v,
+      })
+    }
   />
 
-  <datalist id="clientiListRimessaggi">
-    {clientiDb.map((cliente) => (
-      <option
-        key={cliente.firebaseId}
-        value={cliente.cliente}
-      />
-    ))}
-  </datalist>
-</label>
+  <Input
+    label="Imbarcazione"
+    value={form.barca || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        barca: v,
+      })
+    }
+  />
 
-      <Input
-        label="Imbarcazione"
-        value={form.barca || ""}
-        onChange={(v) => setForm({ ...form, barca: v })}
-      />
+  <Input
+    label="Motore"
+    value={form.motore || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        motore: v,
+      })
+    }
+  />
+</div>
 
-      <Input
-        label="Motore"
-        value={form.motore || ""}
-        onChange={(v) => setForm({ ...form, motore: v })}
-      />
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: "12px",
+  }}
+>
+  <Input
+    label="Data ritiro prevista"
+    type="date"
+    value={form.dataRitiro || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        dataRitiro: v,
+      })
+    }
+  />
 
-      <div className="twoCols">
-        <Input
-          label="Data ingresso"
-          type="date"
-          value={form.ingresso || ""}
-          onChange={(v) => setForm({ ...form, ingresso: v })}
-        />
+  <Input
+    label="Luogo ritiro"
+    value={form.luogoRitiro || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        luogoRitiro: v,
+      })
+    }
+  />
 
-        <Input
-          label="Data uscita"
-          type="date"
-          value={form.uscita || ""}
-          onChange={(v) => setForm({ ...form, uscita: v })}
-        />
-      </div>
-      <Select
-  label="Stato barca"
-  value={form.statoBarca || "Da recuperare"}
-  options={[
-    "Da recuperare",
-    "In cantiere",
-    "Consegnata",
-  ]}
-  onChange={(v) =>
-    setForm({
-      ...form,
-      statoBarca: v,
-    })
-  }
-/>
+  <Select
+    label="Carrello"
+    value={form.carrello || "No"}
+    options={["No", "Sì"]}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        carrello: v,
+        targaCarrello:
+          v === "No" ? "" : form.targaCarrello || "",
+      })
+    }
+  />
+</div>
 
-{(form.statoBarca || "Da recuperare") === "Da recuperare" && (
-  <div className="twoCols">
-    <Input
-      label="Data ritiro prevista"
-      type="date"
-      value={form.dataRitiro || ""}
-      onChange={(v) =>
-        setForm({
-          ...form,
-          dataRitiro: v,
-        })
-      }
-    />
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: "12px",
+  }}
+>
+  <Input
+    label="Data ingresso"
+    type="date"
+    value={form.ingresso || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        ingresso: v,
+      })
+    }
+  />
 
-    <Input
-      label="Luogo ritiro"
-      value={form.luogoRitiro || ""}
-      onChange={(v) =>
-        setForm({
-          ...form,
-          luogoRitiro: v,
-        })
-      }
-    />
-  </div>
-)}
-<Select
-  label="Carrello"
-  value={form.carrello || "No"}
-  options={[
-    "No",
-    "Sì",
-  ]}
-  onChange={(v) =>
-    setForm({
-      ...form,
-      carrello: v,
-      targaCarrello: v === "No" ? "" : form.targaCarrello || "",
-    })
-  }
-/>
+  <Input
+    label="Data uscita"
+    type="date"
+    value={form.uscita || ""}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        uscita: v,
+      })
+    }
+  />
 
-{(form.carrello || "No") === "Sì" && (
+  <Select
+    label="Stato barca"
+    value={form.statoBarca || "Da recuperare"}
+    options={[
+      "Da recuperare",
+      "In cantiere",
+      "Consegnata",
+    ]}
+    onChange={(v) =>
+      setForm({
+        ...form,
+        statoBarca: v,
+      })
+    }
+  />
+</div>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr 1fr",
+    gap: "12px",
+  }}
+>
   <Input
     label="Targa carrello"
     value={form.targaCarrello || ""}
@@ -11681,21 +11743,11 @@ const saldoTotaleCliente =
       })
     }
   />
-)}
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "14px",
-  }}
->
+
   <Select
     label="Chiavi"
     value={form.chiavi || "No"}
-    options={[
-      "No",
-      "Sì",
-    ]}
+    options={["No", "Sì"]}
     onChange={(v) =>
       setForm({
         ...form,
@@ -11707,10 +11759,7 @@ const saldoTotaleCliente =
   <Select
     label="Cuscini"
     value={form.cuscini || "No"}
-    options={[
-      "No",
-      "Sì",
-    ]}
+    options={["No", "Sì"]}
     onChange={(v) =>
       setForm({
         ...form,
@@ -11718,8 +11767,7 @@ const saldoTotaleCliente =
       })
     }
   />
-</div>
-<Select
+  <Select
   label="Copertura"
   value={form.copertura || ""}
   options={[
@@ -11727,49 +11775,61 @@ const saldoTotaleCliente =
     "Copertura cliente",
   ]}
   onChange={(v) =>
-    setForm({ ...form, copertura: v })
+    setForm({
+      ...form,
+      copertura: v,
+    })
   }
 />
+</div>
 
-<Input
-  label="Prezzo rimessaggio euro"
-  value={form.prezzoRimessaggio || ""}
-  onChange={(v) =>
-    setForm({ ...form, prezzoRimessaggio: v })
-  }
-/>
 
-<Input
-  label="Acconto euro"
-  value={form.acconto || ""}
-  onChange={(v) =>
-    setForm({ ...form, acconto: v })
-  }
-/>
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr 1fr",
+    gap: "12px",
+  }}
+>
+  <Input
+    label="Prezzo rimessaggio euro"
+    value={form.prezzoRimessaggio || ""}
+    onChange={(v) =>
+      setForm({ ...form, prezzoRimessaggio: v })
+    }
+  />
 
-<Input
-  label="Saldo euro"
-  value={
-    String(
+  <Input
+    label="Acconto euro"
+    value={form.acconto || ""}
+    onChange={(v) =>
+      setForm({ ...form, acconto: v })
+    }
+  />
+
+  <Input
+    label="Saldo euro"
+    value={String(
       numero(form.prezzoRimessaggio) -
       numero(form.acconto)
-    )
-  }
-  onChange={() => {}}
-  readOnly
-/>
-<Select
-  label="Pagamento"
-  value={form.pagamento || ""}
-  options={[
-    "Da pagare",
-    "Pagato",
-    "Fatturato",
-  ]}
-  onChange={(v) =>
-    setForm({ ...form, pagamento: v })
-  }
-/>
+    )}
+    onChange={() => {}}
+    readOnly
+  />
+
+  <Select
+    label="Pagamento"
+    value={form.pagamento || ""}
+    options={[
+      "Da pagare",
+      "Pagato",
+      "Fatturato",
+    ]}
+    onChange={(v) =>
+      setForm({ ...form, pagamento: v })
+    }
+  />
+</div>
 
 <Textarea
   label="Note"
@@ -12527,26 +12587,13 @@ function LavoroStampabile({ lavoro }) {
       <strong>{euro(numero(lavoro.costoRicambi))}</strong>
     </div>
 
-    <div>
-      <span>
-        <span>Manodopera</span>
-      </span>
-      <strong>
-        {euro(
-  (parseFloat(lavoro.oreManodopera || 0)) *
-  (parseFloat(lavoro.prezzoOra || 0))
-)}
-      </strong>
-    </div>
+    
 
     <div>
       <span>Rimessaggio</span>
       <strong>{euro(numero(lavoro.altro))}</strong>
     </div>
-<div>
-  <span>Altri costi</span>
-  <strong>{euro(numero(lavoro.altriCosti))}</strong>
-</div>
+
     <div
   className="total"
   style={{
@@ -12566,11 +12613,9 @@ function LavoroStampabile({ lavoro }) {
     <br />
     <strong style={{ fontSize: "20px" }}>
       {euro(
-        numero(lavoro.costoRicambi) +
-          (parseFloat(lavoro.oreManodopera || 0)) *
-            (parseFloat(lavoro.prezzoOra || 0)) +
-          numero(lavoro.altro)
-      )}
+  numero(lavoro.costoRicambi) +
+    numero(lavoro.altro)
+)}
     </strong>
   </div>
 
@@ -12590,12 +12635,10 @@ function LavoroStampabile({ lavoro }) {
       <span>Saldo:&nbsp;</span>
       <strong>
         {euro(
-          numero(lavoro.costoRicambi) +
-            (parseFloat(lavoro.oreManodopera || 0)) *
-              (parseFloat(lavoro.prezzoOra || 0)) +
-            numero(lavoro.altro) -
-            numero(lavoro.acconto)
-        )}
+  numero(lavoro.costoRicambi) +
+    numero(lavoro.altro) -
+    numero(lavoro.acconto)
+)}
       </strong>
     </div>
   </div>
@@ -13004,20 +13047,12 @@ function calcolaTotale(preventivo) {
     0
   );
 
-  const manodopera =
-    numero(preventivo.oreManodopera) *
-    numero(preventivo.prezzoOra);
-
   const rimessaggio = numero(preventivo.rimessaggio);
 
-  const altriCosti = numero(preventivo.altro);
-
-  return (
-    ricambi +
-    manodopera +
-    rimessaggio +
-    altriCosti
-  );
+return (
+  ricambi +
+  rimessaggio
+);
 }
 
 function euro(valore) {
