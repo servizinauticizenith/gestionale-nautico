@@ -2997,6 +2997,7 @@ const datiRimessaggio = {
   id: idRimessaggio,
   tipo: "rimessaggio",
   statoBarca: form.statoBarca || "Da recuperare",
+  assegnatoA: form.assegnatoA || "",
   dataRitiro: form.dataRitiro || "",
   luogoRitiro: form.luogoRitiro || "",
   carrello: form.carrello || "No",
@@ -3107,8 +3108,20 @@ async function archiviaLavoro(lavoro) {
   }
 }
 function aggiungiAGoogleCalendar(elemento, tipo = "lavoro") {
-  const calendarioId =
-    "f7a72fbc8abda478d52b89833d4478ff8072b6f4ccefe5cafd7780efaca2f833@group.calendar.google.com";
+  let calendarioId = "";
+
+if (tipo === "rimessaggio") {
+  if (elemento.assegnatoA === "Alessio") {
+    calendarioId =
+      "3a37e83bdc4f75127ec0bc7ae8e743093276ca9f8b572528897eae49cc626697@group.calendar.google.com";
+  } else if (elemento.assegnatoA === "Leonardo") {
+    calendarioId =
+      "c0e969236b2bf52f4a8d1f9418802eb31d248c462e42b099393629687318ed74@group.calendar.google.com";
+  } else {
+    alert("Seleziona prima il dipendente in 'Assegna a'.");
+    return;
+  }
+}
 
   if (tipo === "rimessaggio") {
     let data = "";
@@ -4402,13 +4415,7 @@ if (ordinaClientiPerSaldo) {
 )}
 {stampaElencoLavori && (
   <ElencoLavoriStampabile
-    lavori={[...lavori]
-      .filter((l) => l.stato === "In lavorazione")
-      .sort(
-        (a, b) =>
-          new Date(a.consegna) -
-          new Date(b.consegna)
-      )}
+    lavori={lavoriFiltrati}
   />
 )}
 {stampaElencoRimessaggi && (
@@ -9906,7 +9913,7 @@ width: "100%",
     }
   />
 
-  <Input
+    <Input
     label="Numero telefono"
     value={form.telefono || ""}
     onChange={(v) =>
@@ -9918,6 +9925,14 @@ width: "100%",
   />
   
 </div>
+
+<div
+  style={{
+    borderTop: "2px solid #2563eb",
+    margin: "18px 0",
+    width: "100%",
+  }}
+/>
 
 <div
   style={{
@@ -9959,7 +9974,7 @@ width: "100%",
     }
   />
 
-  <Input
+    <Input
     label="Matricola"
     value={form.matricola || ""}
     onChange={(v) =>
@@ -9971,7 +9986,15 @@ width: "100%",
   />
 </div>
 
-      <div
+<div
+  style={{
+    borderTop: "2px solid #2563eb",
+    margin: "18px 0",
+    width: "100%",
+  }}
+/>
+
+<div
   style={{
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
@@ -10407,92 +10430,91 @@ padding: "10px",
      <div
   style={{
     display: "grid",
-    gridTemplateColumns: "260px 240px 140px",
-    gridTemplateRows: "auto auto",
+    gridTemplateColumns: "220px 180px 150px 130px 120px 180px",
     alignItems: "center",
-    columnGap: "24px",
-    rowGap: "5px",
+    columnGap: "18px",
     minWidth: 0,
     flex: 1,
   }}
 >
-        <strong
-          style={{
-            fontSize: "15px",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {lavoro.cliente}
-        </strong>
+  <strong
+    style={{
+      fontSize: "15px",
+      whiteSpace: "nowrap",
+    }}
+  >
+    {lavoro.cliente || "-"}
+  </strong>
 
-        <span
-  style={{
-    fontSize: "14px",
-    color: "#333",
-    fontWeight: "500",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    flex: 1,
-    minWidth: 0,
-  }}
->
-  {lavoro.titolo || "Senza titolo"}
-</span>
+  <span
+    style={{
+      fontSize: "12px",
+      color: "#64748b",
+      fontWeight: "600",
+      whiteSpace: "nowrap",
+    }}
+  >
+    Scheda: {lavoro.id || "-"}
+  </span>
 
-<span
-  style={{
-    fontSize: "13px",
-    fontWeight: "700",
-    whiteSpace: "nowrap",
-    color:
-      lavoro.pagamento === "Pagato"
-        ? "green"
-        : lavoro.pagamento === "Fatturato"
-        ? "#2563eb"
-        : "red",
-  }}
->
-  {lavoro.pagamento || "Non pagato"}
-</span>
-<span
-  style={{
-    fontSize: "12px",
-    color: "#64748b",
-    fontWeight: "600",
-    whiteSpace: "nowrap",
-  }}
->
-  Scheda: {lavoro.id || "-"}
-</span>
-<span
-  style={{
-    fontSize: "13px",
-    fontWeight: "700",
-    whiteSpace: "nowrap",
-    color: "#111827",
-  }}
->
-  {euro(
-  Math.max(
-  0,
-  numero(lavoro.costoRicambi) +
-    numero(lavoro.altro) -
-    numero(lavoro.acconto)
-)
-)}
-</span>
+  <span
+    style={{
+      fontSize: "14px",
+      color: "#333",
+      fontWeight: "500",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      minWidth: 0,
+    }}
+  >
+    {lavoro.titolo || "Senza titolo"}
+  </span>
 
-<span
-  style={{
-    fontSize: "13px",
-    color: "#666",
-    whiteSpace: "nowrap",
-  }}
->
-  Consegna: {formatData(lavoro.consegna)}
-</span>
-      </div>
+  <span
+    style={{
+      fontSize: "13px",
+      fontWeight: "700",
+      whiteSpace: "nowrap",
+      color:
+        lavoro.pagamento === "Pagato"
+          ? "green"
+          : lavoro.pagamento === "Fatturato"
+          ? "#2563eb"
+          : "red",
+    }}
+  >
+    {lavoro.pagamento || "Non pagato"}
+  </span>
+
+  <span
+    style={{
+      fontSize: "13px",
+      fontWeight: "700",
+      whiteSpace: "nowrap",
+      color: "#111827",
+    }}
+  >
+    {euro(
+      Math.max(
+        0,
+        numero(lavoro.costoRicambi) +
+          numero(lavoro.altro) -
+          numero(lavoro.acconto)
+      )
+    )}
+  </span>
+
+  <span
+    style={{
+      fontSize: "13px",
+      color: "#666",
+      whiteSpace: "nowrap",
+    }}
+  >
+    Consegna: {formatData(lavoro.consegna)}
+  </span>
+</div>
 
       <div className="actions">
        <button
@@ -11891,37 +11913,38 @@ const saldoTotaleCliente =
     borderLeft: "2px solid #dc2626",
     paddingLeft: "12px",
   }}
-  >
-    <div style={{ gridColumn: "9" }}>
-  
-</div>
+>
   <Select
-    label="Stato barca"
-    value={form.statoBarca || "Da recuperare"}
-    options={[
-      "Da recuperare",
-      "In cantiere",
-      "Da consegnare",
-      "Consegnata",
-    ]}
+  label="Stato barca"
+  value={form.statoBarca || "Da recuperare"}
+  options={[
+    "Da recuperare",
+    "In cantiere",
+    "Da consegnare",
+    "Consegnata",
+  ]}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      statoBarca: v,
+    })
+  }
+/>
+</div>
+
+<div style={{ gridColumn: "9" }}>
+  <Input
+    label="Luogo consegna"
+    value={form.luogoConsegna || ""}
     onChange={(v) =>
       setForm({
         ...form,
-        statoBarca: v,
+        luogoConsegna: v,
       })
     }
   />
 </div>
-<Input
-  label="Luogo consegna"
-  value={form.luogoConsegna || ""}
-  onChange={(v) =>
-    setForm({
-      ...form,
-      luogoConsegna: v,
-    })
-  }
-/>
+
 <div style={{ gridColumn: "10" }}>
   <Input
     label="Data consegna"
@@ -11935,6 +11958,32 @@ const saldoTotaleCliente =
     }
   />
 </div>
+
+</div>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "160px",
+    justifyContent: "end",
+    marginTop: "12px",
+  }}
+>
+ <Select
+  label="Assegna a"
+  value={form.assegnatoA || "Seleziona"}
+  options={[
+    "Seleziona",
+    "Alessio",
+    "Leonardo",
+  ]}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      assegnatoA: v,
+    })
+  }
+/>
 </div>
 
 <div
@@ -12875,6 +12924,16 @@ function ElencoLavoriStampabile({ lavori }) {
 
   return (
     <div className="printArea">
+    <style>
+  {`
+    @media print {
+      @page {
+        size: A4 landscape;
+        margin: 10mm;
+      }
+    }
+  `}
+</style>
       <div className="printHeader">
         <h1>Servizi Nautici Zenith</h1>
         <h2>Elenco lavori aperti</h2>
