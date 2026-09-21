@@ -2998,6 +2998,9 @@ const datiRimessaggio = {
   tipo: "rimessaggio",
   statoBarca: form.statoBarca || "Da recuperare",
   assegnatoA: form.assegnatoA || "",
+  calendarioAggiunto: rimessaggioInModifica
+  ? false
+  : form.calendarioAggiunto || false,
   dataRitiro: form.dataRitiro || "",
   luogoRitiro: form.luogoRitiro || "",
   carrello: form.carrello || "No",
@@ -12306,9 +12309,28 @@ const saldoTotaleCliente =
 <button
   type="button"
   className="actionBtn"
-  onClick={() => aggiungiAGoogleCalendar(rimessaggio, "rimessaggio")}
+  onClick={async () => {
+    aggiungiAGoogleCalendar(rimessaggio, "rimessaggio");
+
+    try {
+      await updateDoc(
+        doc(db, "rimessaggi", rimessaggio.firebaseId),
+        {
+          calendarioAggiunto: true,
+        }
+      );
+    } catch (errore) {
+      console.error(
+        "Errore aggiornamento stato calendario:",
+        errore
+      );
+    }
+  }}
   style={{
-    background: "#16a34a",
+    background:
+      rimessaggio.calendarioAggiunto
+        ? "#111827"
+        : "#16a34a",
     color: "white",
   }}
 >
