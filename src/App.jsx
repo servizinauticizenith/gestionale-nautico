@@ -99,6 +99,7 @@ const [mostraFormRicambio, setMostraFormRicambio] = useState(false);
   const [allieviSelezionatiEsame, setAllieviSelezionatiEsame] = useState([]);
   const [filtroCorsoEsami, setFiltroCorsoEsami] = useState("Tutti");
   const [filtroTipoCorso, setFiltroTipoCorso] = useState("Tutti");
+  const [ricercaAllievo, setRicercaAllievo] = useState("");
   const [caricamento, setCaricamento] = useState(true);
   const [utente, setUtente] = useState(null);
   const [email, setEmail] = useState("");
@@ -1689,7 +1690,7 @@ if (documentiMancanti.length === 0) {
     };
   }
 }
-function generaPdfPrenotazioneEsami() {
+async function generaPdfPrenotazioneEsami() {
   const pdf = new jsPDF();
 
   const selezionati = allievi.filter(
@@ -1865,7 +1866,16 @@ function generaPdfPrenotazioneEsami() {
   });
 
   pdf.setTextColor(0, 0, 0);
+for (const allievo of selezionati) {
+  await updateDoc(
+    doc(db, "allievi", allievo.firebaseId),
+    {
+      esamePrenotato: true,
+    }
+  );
+}
 
+setAllieviSelezionatiEsame([]);
   const pdfBlob = pdf.output("blob");
   const pdfUrl = URL.createObjectURL(pdfBlob);
 
@@ -7742,10 +7752,28 @@ return (
   style={{
     display: "flex",
     justifyContent: "center",
+    alignItems: "center",
+    gap: "12px",
     width: "100%",
     marginBottom: "12px",
+    flexWrap: "wrap",
   }}
 >
+  <input
+    type="text"
+    placeholder="Cerca per nome, cognome, codice fiscale o cellulare"
+    value={ricercaAllievo}
+    onChange={(e) => setRicercaAllievo(e.target.value)}
+    style={{
+      minWidth: "320px",
+      padding: "9px 10px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      background: "#ffffff",
+      fontSize: "14px",
+    }}
+  />
+
   <select
     value={filtroTipoCorso}
     onChange={(e) => setFiltroTipoCorso(e.target.value)}
@@ -7777,12 +7805,32 @@ return (
   </select>
 </div>
         {allievi
-  .filter(
-    (allievo) =>
-      !allievo.archiviato &&
-      (filtroTipoCorso === "Tutti" ||
-        allievo.tipoCorso === filtroTipoCorso)
-  )
+  .filter((allievo) => {
+    if (allievo.archiviato) return false;
+
+    if (
+      filtroTipoCorso !== "Tutti" &&
+      allievo.tipoCorso !== filtroTipoCorso
+    ) {
+      return false;
+    }
+
+    const ricerca = ricercaAllievo.trim().toLowerCase();
+
+    if (!ricerca) return true;
+
+    const testoRicerca = [
+      allievo.nome,
+      allievo.cognome,
+      allievo.codiceFiscale,
+      allievo.cellulare,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return testoRicerca.includes(ricerca);
+  })
   .map((allievo) => (
   <div
     key={allievo.firebaseId}
@@ -7792,7 +7840,7 @@ return (
       borderRadius: "12px",
       padding: "16px 18px",
       display: "grid",
-      gridTemplateColumns: "0.9fr 1.1fr 650px",
+      gridTemplateColumns: "1fr 170px 250px 650px",
       gap: "16px",
       alignItems: "center",
     }}
@@ -7803,58 +7851,96 @@ return (
     justifySelf: "start",
   }}
 >
-      <strong
-        style={{
-          fontSize: "16px",
-          color: "#0f172a",
-        }}
-      >
-        {allievo.nome} {allievo.cognome}
-      </strong>
+  <strong
+    style={{
+      fontSize: "16px",
+      color: "#0f172a",
+    }}
+  >
+    {allievo.nome} {allievo.cognome}
+  </strong>
+</div>
 
-     
-    </div>
-
-    <div
+<div
   style={{
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    width: "100%",
-    gap: "24px",
     fontSize: "14px",
     color: "#334155",
     whiteSpace: "nowrap",
+    justifySelf: "start",
   }}
 >
-  <span>
-    {allievo.cellulare || "-"}
-  </span>
+  {allievo.cellulare || "-"}
+</div>
 
-  <strong
-    style={{
-      color: "#0f172a",
-      minWidth: "110px",
-      textAlign: "center",
-      marginLeft: "80px",
-    }}
-  >
-    {allievo.tipoCorso === "Entro le 12 miglia solo motore"
-      ? "12M Motore"
-      : allievo.tipoCorso === "Entro le 12 miglia motore/vela"
-      ? "12M Vela"
-      : allievo.tipoCorso === "Integrazione senza limiti"
-      ? "Integr. senza limiti"
-      : allievo.tipoCorso === "Integrazione vela"
-      ? "Integr. vela"
-      : allievo.tipoCorso || "-"}
-  </strong>
+<div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "10px",
+    whiteSpace: "nowrap",
+  }}
+>
+  <span
+  style={{
+    color: "#334155",
+    fontSize: "14px",
+    fontWeight: "400",
+    textAlign: "center",
+  }}
+>
+  {allievo.tipoCorso === "Entro le 12 miglia solo motore"
+    ? "12M Motore"
+    : allievo.tipoCorso === "Entro le 12 miglia motore/vela"
+    ? "12M Vela"
+    : allievo.tipoCorso === "Integrazione senza limiti"
+    ? "Integr. senza limiti"
+    : allievo.tipoCorso === "Integrazione vela"
+    ? "Integr. vela"
+    : allievo.tipoCorso || "-"}
+</span>
+
+  {allievo.esamePrenotato && (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+        padding: "4px 8px",
+        borderRadius: "6px",
+        background: "#ecfdf5",
+        color: "#166534",
+        fontSize: "12px",
+        fontWeight: "800",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={true}
+        onChange={async (e) => {
+          if (e.target.checked) return;
+
+          await updateDoc(
+            doc(db, "allievi", allievo.firebaseId),
+            {
+              esamePrenotato: false,
+            }
+          );
+        }}
+      />
+
+      Esame prenotato
+    </label>
+  )}
 </div>
 
 <div
   style={{
     display: "flex",
     justifyContent: "flex-end",
+    justifySelf: "end",
+    width: "660px",
     gap: "6px",
     flexWrap: "nowrap",
     alignItems: "center",
@@ -9961,11 +10047,12 @@ versamenti: allievo.versamenti || [],
     >
       {allievi
   .filter(
-    (allievo) =>
-      !allievo.archiviato &&
-      (filtroCorsoEsami === "Tutti" ||
-        allievo.tipoCorso === filtroCorsoEsami)
-  )
+  (allievo) =>
+    !allievo.archiviato &&
+    !allievo.esamePrenotato &&
+    (filtroCorsoEsami === "Tutti" ||
+      allievo.tipoCorso === filtroCorsoEsami)
+)
         .map((allievo) => {
           const selezionato = allieviSelezionatiEsame.includes(
             allievo.firebaseId
@@ -10403,6 +10490,53 @@ versamenti: allievo.versamenti || [],
         <strong>Gruppo</strong>
         <div>{allievoArchivioAperto.gruppo || "-"}</div>
       </div>
+
+      <div>
+  <strong>Esame prenotato</strong>
+
+  <div
+    style={{
+      marginTop: "4px",
+      fontWeight: "700",
+      color: allievoArchivioAperto.esamePrenotato
+        ? "#166534"
+        : "#64748b",
+    }}
+  >
+    {allievoArchivioAperto.esamePrenotato ? "✓ Sì" : "No"}
+  </div>
+
+  {allievoArchivioAperto.esamePrenotato && (
+    <button
+      type="button"
+      className="clientBtn"
+      style={{
+        marginTop: "8px",
+        background: "#dc2626",
+        color: "#ffffff",
+      }}
+      onClick={async () => {
+        await updateDoc(
+          doc(
+            db,
+            "allievi",
+            allievoArchivioAperto.firebaseId
+          ),
+          {
+            esamePrenotato: false,
+          }
+        );
+
+        setAllievoArchivioAperto({
+          ...allievoArchivioAperto,
+          esamePrenotato: false,
+        });
+      }}
+    >
+      Rimuovi prenotazione
+    </button>
+  )}
+</div>
 
       <div>
         <strong>Luogo di nascita</strong>
