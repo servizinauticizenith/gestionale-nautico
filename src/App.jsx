@@ -96,6 +96,9 @@ const [ricambioInModifica, setRicambioInModifica] = useState(null);
 const [mostraFormRicambio, setMostraFormRicambio] = useState(false);
   const [clientiDb, setClientiDb] = useState([]);
   const [allievi, setAllievi] = useState([]);
+  const [allieviSelezionatiEsame, setAllieviSelezionatiEsame] = useState([]);
+  const [filtroCorsoEsami, setFiltroCorsoEsami] = useState("Tutti");
+  const [filtroTipoCorso, setFiltroTipoCorso] = useState("Tutti");
   const [caricamento, setCaricamento] = useState(true);
   const [utente, setUtente] = useState(null);
   const [email, setEmail] = useState("");
@@ -1433,6 +1436,440 @@ function generaPdfSchedaArchivio(allievo) {
       finestraStampa.print();
     };
   }
+}
+function generaPdfSchedaAllievo(allievo) {
+  const pdf = new jsPDF();
+
+  const euro = (valore) =>
+    `EUR ${Number(valore || 0).toFixed(2)}`;
+
+  const dataIt = (valore) =>
+    valore
+      ? new Date(valore + "T00:00:00").toLocaleDateString("it-IT")
+      : "-";
+
+  const versamenti = allievo.versamenti || [];
+
+  const totaleVersato = versamenti.reduce(
+    (totale, versamento) =>
+      totale + Number(versamento.importo || 0),
+    0
+  );
+
+  const residuo = Math.max(
+    0,
+    Number(allievo.costoCorso || 0) - totaleVersato
+  );
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+
+  pdf.text(
+    "SCHEDA ALLIEVO",
+    105,
+    20,
+    { align: "center" }
+  );
+  pdf.setFontSize(12);
+pdf.text(
+  `${allievo.nome || ""} ${allievo.cognome || ""}`.trim(),
+  105,
+  27,
+  { align: "center" }
+);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    `Data stampa: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    30,
+    { align: "right" }
+  );
+
+  pdf.line(20, 35, 190, 35);
+
+  let y = 48;
+
+  const riga = (etichetta, valore) => {
+    pdf.setFont("helvetica", "bold");
+    pdf.text(`${etichetta}:`, 20, y);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.text(String(valore || "-"), 65, y);
+
+    y += 6;
+  };
+
+  riga("Data di nascita", dataIt(allievo.dataNascita));
+  riga("Luogo di nascita", allievo.luogoNascita);
+  riga("Provincia nascita", allievo.provinciaNascita);
+
+  y += 3;
+  pdf.line(20, y, 190, y);
+  y += 6;
+
+  riga(
+    "Indirizzo",
+    `${allievo.indirizzo || ""} ${allievo.civico || ""}`.trim()
+  );
+  riga("CAP", allievo.cap);
+  riga("Citta", allievo.citta);
+  riga("Provincia", allievo.provincia);
+  riga("Codice fiscale", allievo.codiceFiscale);
+  riga("Cellulare", allievo.cellulare);
+  riga("Email", allievo.email);
+  riga("Gruppo", allievo.gruppo);
+
+  y += 3;
+  pdf.line(20, y, 190, y);
+  y += 6;
+
+pdf.setFont("helvetica", "bold");
+pdf.text("Costo corso:", 20, y);
+
+pdf.setFont("helvetica", "normal");
+pdf.text(euro(allievo.costoCorso), 47, y);
+
+pdf.setFont("helvetica", "bold");
+pdf.text("Totale versato:", 83, y);
+
+pdf.setFont("helvetica", "normal");
+pdf.text(euro(totaleVersato), 116, y);
+
+pdf.setFont("helvetica", "bold");
+pdf.text("Da pagare:", 150, y);
+
+pdf.setFont("helvetica", "normal");
+pdf.text(euro(residuo), 172, y);
+
+y += 4;
+
+  y += 2;
+
+pdf.line(20, y, 190, y);
+
+y += 4;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+  pdf.text("VERSAMENTI", 20, y);
+
+  y += 6;
+
+  pdf.setFontSize(10);
+
+  if (versamenti.length === 0) {
+    pdf.setFont("helvetica", "normal");
+    pdf.text("Nessun versamento registrato.", 20, y);
+    y += 8;
+  } else {
+    versamenti.forEach((versamento, indice) => {
+  if (y > 270) {
+    pdf.addPage();
+    y = 20;
+  }
+
+  pdf.setFont("helvetica", "bold");
+  pdf.text(`Versamento ${indice + 1}`, 20, y);
+
+  pdf.setFont("helvetica", "normal");
+
+  pdf.text(
+    `Data: ${dataIt(versamento.data)}`,
+    58,
+    y
+  );
+
+  pdf.text(
+    `Importo: ${euro(versamento.importo)}`,
+    115,
+    y
+  );
+
+  y += 6;
+
+  if (versamento.metodoPagamento) {
+    pdf.text(
+      `Metodo: ${versamento.metodoPagamento}`,
+      25,
+      y
+    );
+    y += 5;
+  }
+
+  if (versamento.note) {
+    pdf.text(
+      `Note: ${versamento.note}`,
+      25,
+      y
+    );
+    y += 5;
+  }
+});
+}
+
+y += 2;
+
+if (y > 240) {
+  pdf.addPage();
+  y = 20;
+}
+
+pdf.line(20, y, 190, y);
+y += 5;
+
+pdf.setFont("helvetica", "bold");
+pdf.setFontSize(12);
+pdf.text("DOCUMENTI", 20, y);
+
+y += 6;
+const documenti = [
+  ["Documento identita", allievo.documenti?.documentoIdentita],
+  ["Codice fiscale", allievo.documenti?.codiceFiscale],
+  ["Certificato medico", allievo.documenti?.certificatoMedico],
+  ["Fototessere", allievo.documenti?.fototessere],
+  ["Bollettini", allievo.documenti?.bollettini],
+  ["Privacy", allievo.documenti?.privacy],
+  ["Autocertificazione", allievo.documenti?.autocertificazione],
+];
+
+const documentiConsegnati = documenti
+  .filter(([, presente]) => presente)
+  .map(([nome]) => nome);
+
+const documentiMancanti = documenti
+  .filter(([, presente]) => !presente)
+  .map(([nome]) => nome);
+
+pdf.setFontSize(10);
+
+pdf.setFont("helvetica", "bold");
+pdf.text("Consegnati:", 20, y);
+y += 7;
+
+pdf.setFont("helvetica", "normal");
+
+if (documentiConsegnati.length === 0) {
+  pdf.text("- Nessun documento consegnato", 25, y);
+  y += 7;
+} else {
+  documentiConsegnati.forEach((documento) => {
+    pdf.text(`- ${documento}`, 25, y);
+    y += 7;
+  });
+}
+
+y += 3;
+
+pdf.setFont("helvetica", "bold");
+pdf.text("Mancanti:", 20, y);
+y += 7;
+
+pdf.setFont("helvetica", "normal");
+
+if (documentiMancanti.length === 0) {
+  pdf.text("- Nessun documento mancante", 25, y);
+  y += 7;
+} else {
+  documentiMancanti.forEach((documento) => {
+    pdf.text(`- ${documento}`, 25, y);
+    y += 7;
+  });
+}
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const finestraStampa = window.open(pdfUrl);
+
+  if (finestraStampa) {
+    finestraStampa.onload = () => {
+      finestraStampa.print();
+    };
+  }
+}
+function generaPdfPrenotazioneEsami() {
+  const pdf = new jsPDF();
+
+  const selezionati = allievi.filter(
+    (allievo) =>
+      !allievo.archiviato &&
+      allieviSelezionatiEsame.includes(allievo.firebaseId)
+  );
+
+  if (selezionati.length === 0) {
+    alert("Seleziona almeno un allievo.");
+    return;
+  }
+
+  const nomeCorso = (tipoCorso) => {
+    if (tipoCorso === "Entro le 12 miglia solo motore") {
+      return "12M Motore";
+    }
+
+    if (tipoCorso === "Entro le 12 miglia motore/vela") {
+      return "12M Vela";
+    }
+
+    if (tipoCorso === "Integrazione vela") {
+      return "Integr. vela";
+    }
+
+    if (tipoCorso === "Integrazione senza limiti") {
+      return "Integr. senza limiti";
+    }
+
+    return tipoCorso || "-";
+  };
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+  pdf.setTextColor(0, 0, 0);
+
+  pdf.text(
+    "PRENOTAZIONE ESAMI",
+    105,
+    20,
+    { align: "center" }
+  );
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+
+  pdf.text(
+    `Data stampa: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    30,
+    { align: "right" }
+  );
+
+  pdf.line(20, 35, 190, 35);
+
+  let y = 48;
+
+  const corsi = [
+    "D1",
+    "Entro le 12 miglia solo motore",
+    "Entro le 12 miglia motore/vela",
+    "Integrazione vela",
+    "Integrazione senza limiti",
+  ];
+
+  corsi.forEach((tipoCorso) => {
+    const prenotati = selezionati.filter(
+      (allievo) => allievo.tipoCorso === tipoCorso
+    );
+
+    if (prenotati.length === 0) return;
+
+    if (y > 245) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(12);
+
+    pdf.text(
+      `${nomeCorso(tipoCorso)} (${prenotati.length})`,
+      20,
+      y
+    );
+
+    y += 8;
+
+    pdf.setFontSize(10);
+
+    prenotati.forEach((allievo, indice) => {
+      if (y > 250) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      // CALCOLO SALDO
+      const totaleVersato = (allievo.versamenti || []).reduce(
+        (totale, versamento) =>
+          totale + Number(versamento.importo || 0),
+        0
+      );
+
+      const daSaldare = Math.max(
+        0,
+        Number(allievo.costoCorso || 0) - totaleVersato
+      );
+
+      // CONTROLLO DOCUMENTI
+      const documenti = allievo.documenti || {};
+
+      const documentiMancanti = [
+        !documenti.documentoIdentita && "Documento identita",
+        !documenti.codiceFiscale && "Codice fiscale",
+        !documenti.certificatoMedico && "Certificato medico",
+        !documenti.fototessere && "Fototessere",
+        !documenti.bollettini && "Bollettini",
+        !documenti.privacy && "Privacy",
+        !documenti.autocertificazione && "Autocertificazione",
+      ].filter(Boolean);
+
+      // NOME ALLIEVO
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFont("helvetica", "normal");
+
+      pdf.text(
+        `${indice + 1}. ${allievo.nome || ""} ${allievo.cognome || ""}`.trim(),
+        25,
+        y
+      );
+
+      // SALDO RESIDUO IN ROSSO
+      if (daSaldare > 0) {
+        pdf.setTextColor(220, 38, 38);
+        pdf.setFont("helvetica", "bold");
+
+        pdf.text(
+          `Da saldare: EUR ${daSaldare.toFixed(2)}`,
+          120,
+          y
+        );
+      }
+
+      y += 6;
+
+      // DOCUMENTI MANCANTI IN ROSSO
+      if (documentiMancanti.length > 0) {
+        pdf.setTextColor(220, 38, 38);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+
+        const testo =
+          `Documenti mancanti: ${documentiMancanti.join(", ")}`;
+
+        const righe = pdf.splitTextToSize(testo, 155);
+
+        pdf.text(righe, 30, y);
+
+        y += righe.length * 5;
+
+        pdf.setFontSize(10);
+      }
+
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFont("helvetica", "normal");
+
+      y += 3;
+    });
+
+    y += 4;
+  });
+
+  pdf.setTextColor(0, 0, 0);
+
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  window.open(pdfUrl, "_blank");
 }
 function generaPdfGruppiAllievi() {
   const pdf = new jsPDF();
@@ -4694,7 +5131,11 @@ reader.readAsText(file);
 
         
         
-<div className="sidebarMenu">
+<div
+  className={`sidebarMenu ${
+    sezione === "scuola" ? "sidebarMenuScuola" : ""
+  }`}
+>
        <div className="sidebarBrand">
   <div className="sidebarTitle">SEA SRLS</div>
 
@@ -4801,7 +5242,7 @@ reader.readAsText(file);
   <>
   <div
   style={{
-    margin: "10px 10px 6px",
+    margin: "4px 10px 4px",
     fontSize: "11px",
     fontWeight: "800",
     color: "rgba(255,255,255,0.65)",
@@ -4835,7 +5276,7 @@ reader.readAsText(file);
    <hr
   style={{
     width: "calc(100% - 16px)",
-    margin: "12px 8px",
+    margin: "6px 8px",
     border: "none",
     borderTop: "1px solid rgba(255,255,255,0.55)",
   }}
@@ -4843,15 +5284,7 @@ reader.readAsText(file);
 
 <div
   style={{
-    height: "1px",
-    background: "rgba(255,255,255,.14)",
-    margin: "8px 10px",
-  }}
-/>
-
-<div
-  style={{
-    margin: "10px 10px 6px",
+    margin: "2px 10px 6px",
     fontSize: "11px",
     fontWeight: "800",
     color: "rgba(255,255,255,0.65)",
@@ -4903,8 +5336,85 @@ reader.readAsText(file);
 >
   Archivio
 </button>
+<div
+  style={{
+    marginTop: "6px",
+    paddingTop: "8px",
+    borderTop: "1px solid rgba(255,255,255,0.35)",
+  }}
+>
+  <div
+    style={{
+      fontSize: "12px",
+      fontWeight: "800",
+      letterSpacing: "0.08em",
+      color: "#cbd5e1",
+      marginBottom: "12px",
+    }}
+  >
+    TOTALI ISCRITTI
+  </div>
+
+  {[
+    ["D1", "D1"],
+    ["Entro le 12 motore", "Entro le 12 miglia solo motore"],
+    ["Entro le 12 vela", "Entro le 12 miglia motore/vela"],
+    ["Integrazione vela", "Integrazione vela"],
+    ["Integrazione senza limiti", "Integrazione senza limiti"],
+  ].map(([etichetta, valore]) => {
+    const totale = allievi.filter(
+      (allievo) =>
+        !allievo.archiviato &&
+        allievo.tipoCorso === valore
+    ).length;
+
+    return (
+      <div
+        key={valore}
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: "10px",
+          marginBottom: "8px",
+          fontSize: "13px",
+          color: "#ffffff",
+        }}
+      >
+        <span>{etichetta}</span>
+        <strong>{totale}</strong>
+      </div>
+    );
+    })}
+</div>
+<div
+  style={{
+    marginTop: "10px",
+    paddingTop: "8px",
+    borderTop: "1px solid rgba(255,255,255,0.25)",
+  }}
+>
+  <div
+    style={{
+      fontSize: "11px",
+      fontWeight: "800",
+      letterSpacing: "0.06em",
+      color: "#cbd5e1",
+      marginBottom: "6px",
+    }}
+  >
+    ESAMI
+  </div>
+
+  <button
+    type="button"
+    onClick={() => setVista("prenotazioneEsami")}
+  >
+    Prenotazione esami
+  </button>
+
+  
+</div>
   </>
-)}
 )}
 
 
@@ -7228,8 +7738,51 @@ return (
           gap: "12px",
         }}
       >
+        <div
+  style={{
+    display: "flex",
+    justifyContent: "center",
+    width: "100%",
+    marginBottom: "12px",
+  }}
+>
+  <select
+    value={filtroTipoCorso}
+    onChange={(e) => setFiltroTipoCorso(e.target.value)}
+    style={{
+      minWidth: "220px",
+      padding: "9px 10px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      background: "#ffffff",
+      color: "#0f172a",
+      fontSize: "14px",
+      fontWeight: "600",
+    }}
+  >
+    <option value="Tutti">Tutti i corsi</option>
+    <option value="D1">D1</option>
+    <option value="Entro le 12 miglia solo motore">
+      12M Motore
+    </option>
+    <option value="Entro le 12 miglia motore/vela">
+      12M Vela
+    </option>
+    <option value="Integrazione vela">
+      Integr. vela
+    </option>
+    <option value="Integrazione senza limiti">
+      Integr. senza limiti
+    </option>
+  </select>
+</div>
         {allievi
-  .filter((allievo) => !allievo.archiviato)
+  .filter(
+    (allievo) =>
+      !allievo.archiviato &&
+      (filtroTipoCorso === "Tutti" ||
+        allievo.tipoCorso === filtroTipoCorso)
+  )
   .map((allievo) => (
   <div
     key={allievo.firebaseId}
@@ -7239,12 +7792,17 @@ return (
       borderRadius: "12px",
       padding: "16px 18px",
       display: "grid",
-      gridTemplateColumns: "1.6fr 1fr 430px",
+      gridTemplateColumns: "0.9fr 1.1fr 650px",
       gap: "16px",
       alignItems: "center",
     }}
   >
-    <div>
+    <div
+  style={{
+    textAlign: "left",
+    justifySelf: "start",
+  }}
+>
       <strong
         style={{
           fontSize: "16px",
@@ -7254,31 +7812,52 @@ return (
         {allievo.nome} {allievo.cognome}
       </strong>
 
-      <div
-        style={{
-          marginTop: "4px",
-          fontSize: "13px",
-          color: "#64748b",
-        }}
-      >
-        {allievo.codiceFiscale || "-"}
-      </div>
+     
     </div>
 
     <div
   style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    width: "100%",
+    gap: "24px",
     fontSize: "14px",
     color: "#334155",
+    whiteSpace: "nowrap",
   }}
 >
-  {allievo.cellulare || "-"}
+  <span>
+    {allievo.cellulare || "-"}
+  </span>
+
+  <strong
+    style={{
+      color: "#0f172a",
+      minWidth: "110px",
+      textAlign: "center",
+      marginLeft: "80px",
+    }}
+  >
+    {allievo.tipoCorso === "Entro le 12 miglia solo motore"
+      ? "12M Motore"
+      : allievo.tipoCorso === "Entro le 12 miglia motore/vela"
+      ? "12M Vela"
+      : allievo.tipoCorso === "Integrazione senza limiti"
+      ? "Integr. senza limiti"
+      : allievo.tipoCorso === "Integrazione vela"
+      ? "Integr. vela"
+      : allievo.tipoCorso || "-"}
+  </strong>
 </div>
 
 <div
   style={{
     display: "flex",
     justifyContent: "flex-end",
-    gap: "8px",
+    gap: "6px",
+    flexWrap: "nowrap",
+    alignItems: "center",
   }}
 >
     <button
@@ -7304,6 +7883,17 @@ return (
   }}
 >
   Visualizza
+</button>
+<button
+  type="button"
+  className="clientBtn"
+  style={{
+    background: "#7c3aed",
+    color: "#ffffff",
+  }}
+  onClick={() => generaPdfSchedaAllievo(allievo)}
+>
+  Stampa scheda
 </button>
       <button
         type="button"
@@ -7388,13 +7978,24 @@ versamenti: allievo.versamenti || [],
   allievoArchivioAperto && (
     <div
       style={{
-        marginTop: "24px",
-        padding: "20px",
-        border: "1px solid #e2e8f0",
-        borderRadius: "12px",
-        background: "#f8fafc",
+        position: "fixed",
+        inset: 0,
+        background: "rgba(15, 23, 42, 0.55)",
+        zIndex: 9999,
+        overflowY: "auto",
+        padding: "40px 20px",
       }}
     >
+      <div
+        style={{
+          maxWidth: "950px",
+          margin: "0 auto",
+          padding: "24px",
+          border: "1px solid #e2e8f0",
+          borderRadius: "12px",
+          background: "#ffffff",
+        }}
+      >
       <div
         style={{
           display: "flex",
@@ -7644,8 +8245,9 @@ versamenti: allievo.versamenti || [],
           ? "✓ Presente"
           : "✗ Mancante"}
       </div>
-    </div>
+        </div>
   </div>
+</div>
 </div>
 </div>
 </div>
@@ -9277,6 +9879,157 @@ versamenti: allievo.versamenti || [],
       })}
   </section>
 )}
+{sezione === "scuola" && vista === "prenotazioneEsami" && (
+  <section
+    style={{
+      width: "100%",
+      background: "#ffffff",
+      borderRadius: "14px",
+      padding: "22px",
+      boxShadow: "0 4px 14px rgba(15, 23, 42, 0.08)",
+    }}
+  >
+    <h2
+      style={{
+        marginTop: 0,
+        marginBottom: "18px",
+        color: "#0f172a",
+      }}
+    >
+      Prenotazione esami
+    </h2>
+<div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    marginBottom: "12px",
+  }}
+>
+  <button
+    type="button"
+    className="primary"
+    onClick={generaPdfPrenotazioneEsami}
+    disabled={allieviSelezionatiEsame.length === 0}
+    style={{
+      opacity: allieviSelezionatiEsame.length === 0 ? 0.5 : 1,
+      cursor:
+        allieviSelezionatiEsame.length === 0
+          ? "not-allowed"
+          : "pointer",
+    }}
+  >
+    Stampa selezionati
+  </button>
+</div>
+
+    <div
+  style={{
+    display: "flex",
+    justifyContent: "center",
+    marginBottom: "16px",
+  }}
+>
+  <select
+    value={filtroCorsoEsami}
+    onChange={(e) => setFiltroCorsoEsami(e.target.value)}
+    style={{
+      minWidth: "240px",
+      padding: "9px 10px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      background: "#ffffff",
+      fontSize: "14px",
+      fontWeight: "600",
+    }}
+  >
+    <option value="Tutti">Tutti i corsi</option>
+    <option value="D1">D1</option>
+    <option value="Entro le 12 miglia solo motore">12M Motore</option>
+    <option value="Entro le 12 miglia motore/vela">12M Vela</option>
+    <option value="Integrazione vela">Integr. vela</option>
+    <option value="Integrazione senza limiti">
+      Integr. senza limiti
+    </option>
+  </select>
+</div>
+
+    <div
+      style={{
+        display: "grid",
+        gap: "10px",
+      }}
+    >
+      {allievi
+  .filter(
+    (allievo) =>
+      !allievo.archiviato &&
+      (filtroCorsoEsami === "Tutti" ||
+        allievo.tipoCorso === filtroCorsoEsami)
+  )
+        .map((allievo) => {
+          const selezionato = allieviSelezionatiEsame.includes(
+            allievo.firebaseId
+          );
+
+          const tipoCorso =
+            allievo.tipoCorso === "Entro le 12 miglia solo motore"
+              ? "12M Motore"
+              : allievo.tipoCorso === "Entro le 12 miglia motore/vela"
+              ? "12M Vela"
+              : allievo.tipoCorso === "Integrazione senza limiti"
+              ? "Integr. senza limiti"
+              : allievo.tipoCorso === "Integrazione vela"
+              ? "Integr. vela"
+              : allievo.tipoCorso || "-";
+
+          return (
+            <div
+              key={allievo.firebaseId}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "40px 1fr 220px",
+                alignItems: "center",
+                gap: "12px",
+                padding: "12px 16px",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                background: "#ffffff",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selezionato}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setAllieviSelezionatiEsame((precedenti) => [
+                      ...precedenti,
+                      allievo.firebaseId,
+                    ]);
+                  } else {
+                    setAllieviSelezionatiEsame((precedenti) =>
+                      precedenti.filter(
+                        (id) => id !== allievo.firebaseId
+                      )
+                    );
+                  }
+                }}
+              />
+
+              <strong>
+                {allievo.nome} {allievo.cognome}
+              </strong>
+
+              <div>
+                {tipoCorso}
+              </div>
+            </div>
+          );
+        })}
+    </div>
+
+
+  </section>
+)}
 {sezione === "scuola" && vista === "gruppiAllievi" && (
   <section
     style={{
@@ -9532,13 +10285,24 @@ versamenti: allievo.versamenti || [],
     {allievoArchivioAperto && (
   <div
     style={{
-      marginTop: "24px",
-      padding: "20px",
-      border: "1px solid #e2e8f0",
-      borderRadius: "12px",
-      background: "#f8fafc",
+      position: "fixed",
+      inset: 0,
+      background: "rgba(15, 23, 42, 0.55)",
+      zIndex: 9999,
+      overflowY: "auto",
+      padding: "40px 20px",
     }}
   >
+    <div
+      style={{
+        maxWidth: "950px",
+        margin: "0 auto",
+        padding: "24px",
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
+        background: "#ffffff",
+      }}
+    >
     <div
       style={{
         display: "flex",
@@ -9840,12 +10604,13 @@ width: "100%",
 
   <div>
     {allievoArchivioAperto.tipoPatente || "-"}
-  </div>
+ </div>
 </div>
   </div>
 </div>
     </div>
   </div>
+</div>
 )}
   </section>
 )}

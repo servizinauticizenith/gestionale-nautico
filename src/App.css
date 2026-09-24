@@ -986,6 +986,23 @@ input[type="number"] {
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
 }
+.sidebarMenuScuola button {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+.sidebarMenuScuola button {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.sidebarMenuScuola .sidebarBrand {
+  margin-bottom: 6px;
+}
+
+.sidebarMenuScuola hr {
+  margin-top: 6px !important;
+  margin-bottom: 6px !important;
+}
   width: 100%;
   border: none;
   background: transparent;
