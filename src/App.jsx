@@ -143,6 +143,13 @@ const [nuovoVersamento, setNuovoVersamento] = useState({
   importo: "",
   metodo: "",
 });
+
+const [nuovoAcconto, setNuovoAcconto] = useState({
+  data: "",
+  importo: "",
+  metodo: "",
+});
+
 const [allievoInModifica, setAllievoInModifica] = useState(null);
 
 const [allievoArchivioAperto, setAllievoArchivioAperto] = useState(null);
@@ -896,6 +903,239 @@ async function generaRicevutaVersamento(allievo, versamento, index) {
     "Documento generato dal Gestionale Scuola Nautica Zenith",
     105,
     228,
+    {
+      align: "center",
+    }
+  );
+
+  // STAMPA DIRETTA
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const finestraStampa = window.open(pdfUrl);
+
+  if (finestraStampa) {
+    finestraStampa.onload = () => {
+      finestraStampa.print();
+    };
+  }
+}
+async function generaRicevutaAcconto(cliente, acconto, index) {
+  const pdf = new jsPDF();
+
+  const logo = await fetch("/snz2.jpg")
+    .then((response) => response.blob())
+    .then(
+      (blob) =>
+        new Promise((resolve) => {
+          const reader = new FileReader();
+
+          reader.onloadend = () => resolve(reader.result);
+
+          reader.readAsDataURL(blob);
+        })
+    );
+
+  const nomeCliente = cliente.cliente || "-";
+
+  const dataPagamento = acconto.data
+    ? new Date(acconto.data + "T00:00:00").toLocaleDateString("it-IT")
+    : "-";
+
+  const importo = Number(acconto.importo || 0).toFixed(2);
+
+  const accontiPrecedenti = (cliente.acconti || []).slice(0, index);
+
+  const totaleAccontiFinoAQui = (cliente.acconti || [])
+    .slice(0, index + 1)
+    .reduce(
+      (totale, a) =>
+        totale + Number(a.importo || 0),
+      0
+    );
+
+  const totaleRicambi = (cliente.ricambiDettaglio || []).reduce(
+    (totale, ricambio) =>
+      totale +
+      Number(ricambio.quantita || 0) *
+        Number(ricambio.prezzo || 0),
+    0
+  );
+
+  const totaleLavoro =
+    totaleRicambi +
+    Number(cliente.altro || 0);
+
+  const saldoMancante = Math.max(
+    0,
+    totaleLavoro - totaleAccontiFinoAQui
+  ).toFixed(2);
+
+  // LOGO
+  pdf.addImage(
+    logo,
+    "JPEG",
+    20,
+    15,
+    30,
+    30
+  );
+
+  // INTESTAZIONE
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+
+  pdf.text(
+    "SERVIZI NAUTICI ZENITH",
+    35,
+    54,
+    {
+      align: "center",
+    }
+  );
+
+  // DATA PAGAMENTO
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(11);
+
+  pdf.text(
+    `Data pagamento: ${dataPagamento}`,
+    190,
+    25,
+    {
+      align: "right",
+    }
+  );
+
+  // TITOLO
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(16);
+
+  pdf.text(
+    "RICEVUTA DI PAGAMENTO",
+    105,
+    75,
+    {
+      align: "center",
+    }
+  );
+
+  // LINEA
+  pdf.line(20, 82, 190, 82);
+
+  // CLIENTE
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(11);
+
+  pdf.text(
+    "Ricevuto da:",
+    20,
+    95
+  );
+
+  pdf.setFont("helvetica", "bold");
+
+  pdf.text(
+    nomeCliente,
+    50,
+    95
+  );
+
+  // IMPORTO ATTUALE
+  pdf.setFont("helvetica", "normal");
+
+  pdf.text(
+    "Importo versato:",
+    20,
+    120
+  );
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(14);
+
+  pdf.text(
+    `EUR ${importo}`,
+    60,
+    120
+  );
+
+  // METODO
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(11);
+
+  pdf.text(
+    `Metodo di pagamento: ${acconto.metodo || "-"}`,
+    20,
+    135
+  );
+
+  let y = 155;
+
+  // VERSAMENTI PRECEDENTI
+  if (accontiPrecedenti.length > 0) {
+    pdf.setFont("helvetica", "bold");
+    pdf.text(
+      "Versamenti precedenti:",
+      20,
+      y
+    );
+
+    y += 10;
+
+    pdf.setFont("helvetica", "normal");
+
+    accontiPrecedenti.forEach((versamentoPrecedente) => {
+      const dataPrecedente = versamentoPrecedente.data
+        ? new Date(
+            versamentoPrecedente.data + "T00:00:00"
+          ).toLocaleDateString("it-IT")
+        : "-";
+
+      const importoPrecedente = Number(
+        versamentoPrecedente.importo || 0
+      ).toFixed(2);
+
+      pdf.text(
+        `${dataPrecedente} - EUR ${importoPrecedente} - ${versamentoPrecedente.metodo || "-"}`,
+        25,
+        y
+      );
+
+      y += 8;
+    });
+
+    y += 5;
+  }
+
+  // RESIDUO
+  pdf.setFont("helvetica", "bold");
+
+  pdf.text(
+    `Importo residuo: EUR ${saldoMancante}`,
+    20,
+    y
+  );
+
+  y += 20;
+
+  // CAUSALE
+  pdf.setFont("helvetica", "normal");
+
+  pdf.text(
+    "Acconto relativo a lavori e servizi nautici.",
+    20,
+    y
+  );
+
+  // FOOTER
+  pdf.line(20, 250, 190, 250);
+
+  pdf.setFontSize(9);
+
+  pdf.text(
+    "Documento generato dal Gestionale Servizi Nautici Zenith",
+    105,
+    263,
     {
       align: "center",
     }
@@ -2581,6 +2821,26 @@ async function salvaCliente(e) {
     alert("Inserisci il nome cliente");
     return;
   }
+  const clienteDuplicato = clientiDb.find((cliente) => {
+  if (
+    clienteInModifica &&
+    cliente.firebaseId === clienteInModifica
+  ) {
+    return false;
+  }
+
+  return (
+    (cliente.cliente || "").trim().toLowerCase() ===
+    formCliente.cliente.trim().toLowerCase()
+  );
+});
+
+if (clienteDuplicato) {
+  alert(
+    `Attenzione: ${clienteDuplicato.cliente} è già presente nell'archivio clienti.`
+  );
+  return;
+}
 
   const datiCliente = { ...formCliente };
   delete datiCliente.firebaseId;
@@ -4824,7 +5084,15 @@ if (ordinaClientiPerSaldo) {
     return saldoCliente(b) - saldoCliente(a);
   });
 }
-
+else {
+  clientiOrdinati.sort((a, b) =>
+    (a.cliente || "").localeCompare(
+      b.cliente || "",
+      "it",
+      { sensitivity: "base" }
+    )
+  );
+}
   if (caricamento) {
     return (
       <div className="loginPage">
@@ -7911,6 +8179,21 @@ return (
 
     return testoRicerca.includes(ricerca);
   })
+  .sort((a, b) => {
+  const confrontoCognome = (a.cognome || "").localeCompare(
+    b.cognome || "",
+    "it",
+    { sensitivity: "base" }
+  );
+
+  if (confrontoCognome !== 0) return confrontoCognome;
+
+  return (a.nome || "").localeCompare(
+    b.nome || "",
+    "it",
+    { sensitivity: "base" }
+  );
+})
   .map((allievo) => (
   <div
     key={allievo.firebaseId}
@@ -7937,7 +8220,7 @@ return (
       color: "#0f172a",
     }}
   >
-    {allievo.nome} {allievo.cognome}
+    {allievo.cognome} {allievo.nome}
   </strong>
 </div>
 
@@ -11196,23 +11479,217 @@ width: "100%",
     })
   }
 />
-  <Input
-  label="Acconto euro"
-  type="number"
-  value={form.acconto || ""}
-  onChange={(v) =>
-    setForm({
-      ...form,
-      acconto: v,
-    })
-  }
+</div>
+</div>
+
+<div
+  style={{
+    width: "100%",
+    height: "2px",
+    background: "#2563eb",
+    borderRadius: "999px",
+    margin: "16px 0",
+  }}
 />
+<h3
+  style={{
+    width: "100%",
+    textAlign: "center",
+    color: "#0f172a",
+    fontSize: "18px",
+    fontWeight: "700",
+    margin: "4px 0 18px 0",
+  }}
+>
+  Dati finanziari
+</h3>
+<div
+  style={{
+    width: "100%",
+    textAlign: "center",
+    color: "#334155",
+    fontSize: "14px",
+    fontWeight: "700",
+    margin: "-8px 0 16px 0",
+  }}
+>
+  Versamenti
+</div>
+<div
+  style={{
+    width: "100%",
+  }}
+>
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr 1fr",
+      gap: "12px",
+      width: "100%",
+    }}
+  >
+    
+  <div
+  style={{
+    gridColumn: "1 / -1",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "flex-end",
+    gap: "12px",
+    width: "100%",
+  }}
+>
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Data
+    </span>
+
+    <input
+      type="date"
+      value={nuovoAcconto.data}
+      onChange={(e) =>
+        setNuovoAcconto({
+          ...nuovoAcconto,
+          data: e.target.value,
+        })
+      }
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Importo €
+    </span>
+
+    <input
+      type="number"
+      value={nuovoAcconto.importo}
+      onChange={(e) =>
+        setNuovoAcconto({
+          ...nuovoAcconto,
+          importo: e.target.value,
+        })
+      }
+    />
+  </label>
+
+  <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+    <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+      Metodo
+    </span>
+
+    <select
+      value={nuovoAcconto.metodo}
+      onChange={(e) =>
+        setNuovoAcconto({
+          ...nuovoAcconto,
+          metodo: e.target.value,
+        })
+      }
+    >
+      <option value="">Seleziona</option>
+      <option value="Contanti">Contanti</option>
+      <option value="Bonifico">Bonifico</option>
+      <option value="POS">POS</option>
+    </select>
+  </label>
+
+  <button
+    type="button"
+    className="primary"
+    onClick={() => {
+      if (!nuovoAcconto.data || !nuovoAcconto.importo) {
+        alert("Inserisci data e importo");
+        return;
+      }
+
+      setForm({
+        ...form,
+        acconti: [
+          ...(form.acconti || []),
+          nuovoAcconto,
+        ],
+      });
+
+      setNuovoAcconto({
+        data: "",
+        importo: "",
+        metodo: "",
+      });
+    }}
+  >
+    + Aggiungi
+  </button>
+</div>
+
+{(form.acconti || []).length > 0 && (
+  <div
+    style={{
+      gridColumn: "1 / -1",
+      marginTop: "14px",
+      borderTop: "1px solid #e2e8f0",
+      paddingTop: "12px",
+    }}
+  >
+    {(form.acconti || []).map((acconto, index) => (
+      <div
+        key={index}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "150px 160px 180px 140px",
+          gap: "12px",
+          alignItems: "center",
+          padding: "8px 0",
+          borderBottom: "1px solid #e2e8f0",
+        }}
+      >
+        <div>
+          {acconto.data
+            ? new Date(acconto.data + "T00:00:00").toLocaleDateString("it-IT")
+            : "-"}
+        </div>
+
+        <div>
+          <strong>
+            {Number(acconto.importo || 0).toFixed(2)} €
+          </strong>
+        </div>
+
+        <div>{acconto.metodo || "-"}</div>
+
+        <button
+          type="button"
+          onClick={() =>
+            generaRicevutaAcconto(
+              form,
+              acconto,
+              index
+            )
+          }
+          style={{
+            padding: "7px 12px",
+            border: "none",
+            borderRadius: "7px",
+            background: "#2563eb",
+            color: "white",
+            fontWeight: "700",
+            cursor: "pointer",
+          }}
+        >
+          Ricevuta
+        </button>
+      </div>
+    ))}
+  </div>
+)}
+
 </div>
 </div>
 <div
   className="totalBox"
   style={{
     color: "#dc2626",
+    marginTop: "24px",
   }}
 >
   Saldo da incassare:{" "}
@@ -11228,7 +11705,11 @@ width: "100%",
           0
         ) +
           numero(form.altro) -
-          numero(form.acconto)
+          (form.acconti || []).reduce(
+  (totale, acconto) =>
+    totale + numero(acconto.importo),
+  0
+)
       )
     )}
   </strong>
@@ -11248,7 +11729,15 @@ width: "100%",
     )}
   </strong>
 </div>
-
+<div
+  style={{
+    width: "100%",
+    height: "2px",
+    background: "#2563eb",
+    borderRadius: "999px",
+    margin: "16px 0",
+  }}
+/>
 <div
   style={{
     display: "grid",
@@ -12443,47 +12932,79 @@ const saldoTotaleCliente =
   </strong>
 </div>
 
+  <div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    flexWrap: "nowrap",
+  }}
+>
   <div>
     Lavori: <strong>{lavoriCliente.length}</strong> | Preventivi:{" "}
     <strong>{preventiviCliente.length}</strong> | Rimessaggi:{" "}
     <strong>{rimessaggiCliente.length}</strong>
   </div>
 
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      padding: "6px 10px",
+      borderRadius: "8px",
+      background: "#fef2f2",
+      color: "#dc2626",
+      fontWeight: "800",
+      fontSize: "13px",
+      whiteSpace: "nowrap",
+      marginLeft: "60px",
+    }}
+  >
+    Da incassare:{" "}
+    {euro(
+      numero(saldoLavoriCliente) +
+        numero(saldoRimessaggiCliente)
+    )}
+  </div>
+</div>
+
 </div>
 </div>
 </div>
 
     <div className="clientActions">
-    <button
-  type="button"
-  className="clientBtn"
-  style={{
-    background: "#0f172a",
-    color: "white",
-  }}
-  onClick={() => {
-  const nuovoAperto =
-    clienteAperto === cliente.firebaseId
-      ? null
-      : cliente.firebaseId;
 
-  setClienteAperto(nuovoAperto);
-  setRicerca("");
 
-  if (nuovoAperto) {
-    setTimeout(() => {
-      document
-        .getElementById(`storico-${cliente.firebaseId}`)
-        ?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-    }, 150);
-  }
-}}
->
-  📂 Storico
-</button>
+  <button
+    type="button"
+    className="clientBtn"
+    style={{
+      background: "#0f172a",
+      color: "white",
+    }}
+    onClick={() => {
+      const nuovoAperto =
+        clienteAperto === cliente.firebaseId
+          ? null
+          : cliente.firebaseId;
+
+      setClienteAperto(nuovoAperto);
+      setRicerca("");
+
+      if (nuovoAperto) {
+        setTimeout(() => {
+          document
+            .getElementById(`storico-${cliente.firebaseId}`)
+            ?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+        }, 150);
+      }
+    }}
+  >
+    📂 Storico
+  </button>
       <button
   className="clientBtn editBtn"
   onClick={() => {
