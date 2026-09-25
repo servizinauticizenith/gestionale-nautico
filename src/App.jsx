@@ -80,6 +80,7 @@ function nuovoPreventivoVuoto() {
   descrizione: "",
   ricambiDettaglio: [],
 costoRicambi: "",
+importoLavorazione: "",
 rimessaggio: "",
 stato: "Da preparare",
   note: "",
@@ -4223,7 +4224,12 @@ padding-top: 10px;
   <h2>Dettaglio costi</h2>
 
   <div class="priceRows">
-    <div>
+  <div>
+    <span>Importo lavorazione</span>
+  <strong>${euro(preventivo.importoLavorazione || 0)}</strong>
+</div>
+
+<div>
   <span>Ricambi</span>
   <strong>${euro(
     (preventivo.ricambiDettaglio || []).reduce(
@@ -4236,16 +4242,14 @@ padding-top: 10px;
   )}</strong>
 </div>
 
-    <div>
+<div>
   <span>Rimessaggio</span>
   <strong>${euro(preventivo.rimessaggio || 0)}</strong>
 </div>
 
-    <div class="total">
-      <span>Totale preventivo</span>
-      <strong>${euro(totale)}</strong>
-    </div>
-  </div>
+<div class="total">
+  <span>Totale preventivo</span>
+  <strong>${euro(totale)}</strong>
 </div>
 
        <div class="section">
@@ -5752,7 +5756,28 @@ left: "250px",
         Torna alla dashboard
       </button>
     </div>
-
+<div
+  style={{
+    marginBottom: "16px",
+  }}
+>
+  <input
+    type="text"
+    placeholder="Cerca cliente, titolo lavoro, barca, motore o matricola..."
+    value={ricerca}
+    onChange={(e) => setRicerca(e.target.value)}
+    style={{
+      width: "100%",
+      maxWidth: "650px",
+      display: "block",
+      margin: "0 auto",
+      padding: "10px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+    }}
+  />
+</div>
     <div
       style={{
         display: "grid",
@@ -5760,7 +5785,24 @@ left: "250px",
       }}
     >
       {lavori
-        .filter((lavoro) => lavoro.archiviato)
+  .filter((lavoro) => lavoro.archiviato)
+  .filter((lavoro) => {
+    const testo = [
+      lavoro.cliente,
+      lavoro.titolo,
+      lavoro.lavoro,
+      lavoro.barca,
+      lavoro.motore,
+      lavoro.matricola,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return (
+      ricerca.trim() === "" ||
+      testo.includes(ricerca.toLowerCase())
+    );
+  })
         .map((lavoro) => (
           <div
             key={lavoro.firebaseId}
@@ -5906,7 +5948,28 @@ left: "250px",
         Torna alla dashboard
       </button>
     </div>
-
+<div
+  style={{
+    marginBottom: "16px",
+  }}
+>
+  <input
+    type="text"
+    placeholder="Cerca cliente, barca, motore, matricola o targa carrello..."
+    value={ricerca}
+    onChange={(e) => setRicerca(e.target.value)}
+    style={{
+      width: "100%",
+      maxWidth: "650px",
+      display: "block",
+      margin: "0 auto",
+      padding: "10px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+    }}
+  />
+</div>
     <div
       style={{
         display: "grid",
@@ -5914,8 +5977,25 @@ left: "250px",
       }}
     >
       {rimessaggi
-        .filter((rimessaggio) => rimessaggio.archiviato)
-        .map((rimessaggio) => (
+  .filter((rimessaggio) => rimessaggio.archiviato)
+  .filter((rimessaggio) => {
+    const testo = [
+      rimessaggio.cliente,
+      rimessaggio.barca,
+      rimessaggio.motore,
+      rimessaggio.matricola,
+      rimessaggio.targaCarrello,
+      rimessaggio.id,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return (
+      ricerca.trim() === "" ||
+      testo.includes(ricerca.toLowerCase())
+    );
+  })
+  .map((rimessaggio) => (
           <div
             key={rimessaggio.firebaseId}
             style={{
@@ -11772,11 +11852,23 @@ padding: "10px",
   <div
   style={{
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "1fr 1fr 1fr",
     gap: "12px",
     width: "100%",
   }}
 >
+  <Input
+    label="Importo lavorazione"
+    type="number"
+    value={formPreventivo.importoLavorazione || ""}
+    onChange={(v) =>
+      setFormPreventivo({
+        ...formPreventivo,
+        importoLavorazione: v,
+      })
+    }
+  />
+
   <Input
     label="Costo ricambi euro"
     type="number"
@@ -11812,13 +11904,14 @@ padding: "10px",
   Totale preventivo:{" "}
   <strong>
     {euro(
-      (formPreventivo.ricambiDettaglio || []).reduce(
-        (totale, ricambio) =>
-          totale +
-          numero(ricambio.quantita) *
-            numero(ricambio.prezzo),
-        0
-      ) +
+      numero(formPreventivo.importoLavorazione) +
+        (formPreventivo.ricambiDettaglio || []).reduce(
+          (totale, ricambio) =>
+            totale +
+            numero(ricambio.quantita) *
+              numero(ricambio.prezzo),
+          0
+        ) +
         numero(formPreventivo.rimessaggio)
     )}
   </strong>
@@ -14362,9 +14455,11 @@ function calcolaTotale(preventivo) {
     0
   );
 
-  const rimessaggio = numero(preventivo.rimessaggio);
+ const importoLavorazione = numero(preventivo.importoLavorazione);
+const rimessaggio = numero(preventivo.rimessaggio);
 
 return (
+  importoLavorazione +
   ricambi +
   rimessaggio
 );
