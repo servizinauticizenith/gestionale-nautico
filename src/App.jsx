@@ -135,6 +135,8 @@ const [clienteInModifica, setClienteInModifica] = useState(null);
 const [clienteAperto, setClienteAperto] = useState(null);
 const [clienteOrigineScheda, setClienteOrigineScheda] = useState(null);
 const [ordinaClientiPerSaldo, setOrdinaClientiPerSaldo] = useState(false);
+const [filtroClienti, setFiltroClienti] = useState("Tutti");
+const [stampaElencoClienti, setStampaElencoClienti] = useState(false);
 const [ricercaGlobale, setRicercaGlobale] = useState("");
 const [ricercaAllievi, setRicercaAllievi] = useState("");
 const [mostraFormAllievo, setMostraFormAllievo] = useState(false);
@@ -4815,9 +4817,13 @@ const matchStatoBarca =
   filtroStatoBarcaRimessaggi === "Tutti" ||
   statoBarcaRimessaggio === filtroStatoBarcaRimessaggi;
 
-    const annoRimessaggio = r.ingresso
-      ? new Date(r.ingresso).getFullYear().toString()
-      : "";
+    const valoreIngresso = String(r.dataRitiro || "");
+
+const annoTrovato = valoreIngresso.match(/\b(20\d{2})\b/);
+
+const annoRimessaggio = annoTrovato
+  ? annoTrovato[1]
+  : "";
 
     const matchAnno =
       filtroAnnoRimessaggi === "Tutti" ||
@@ -5029,60 +5035,118 @@ totaleRimessaggiDaIncassare: rimessaggi
     .toLowerCase();
 
 return testo.includes(ricerca.toLowerCase());});
-const clientiOrdinati = [...clientiRicercatiLavoro];
+const normalizzaNomeCliente = (valore) =>
+  String(valore || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .sort()
+    .join(" ");
+
+const saldoCliente = (cliente) => {
+  const nomeCliente = normalizzaNomeCliente(cliente.cliente);
+
+  const lavoriCliente = lavori.filter(
+    (lavoro) =>
+      normalizzaNomeCliente(lavoro.cliente) === nomeCliente
+  );
+
+  const rimessaggiCliente = rimessaggi.filter(
+    (rimessaggio) =>
+      normalizzaNomeCliente(rimessaggio.cliente) === nomeCliente
+  );
+
+  const saldoLavori = lavoriCliente.reduce((totale, lavoro) => {
+    if (
+      lavoro.pagamento === "Pagato" ||
+      lavoro.pagamento === "Fatturato"
+    ) {
+      return totale;
+    }
+
+    const totaleLavoro =
+      numero(lavoro.costoRicambi) +
+      numero(lavoro.altro);
+
+    return (
+      totale +
+      Math.max(
+        0,
+        totaleLavoro - numero(lavoro.acconto)
+      )
+    );
+  }, 0);
+
+  const saldoRimessaggi = rimessaggiCliente.reduce(
+    (totale, rimessaggio) => {
+      if (
+        rimessaggio.pagamento === "Pagato" ||
+        rimessaggio.pagamento === "Fatturato"
+      ) {
+        return totale;
+      }
+
+      return (
+        totale +
+        Math.max(
+          0,
+          numero(rimessaggio.prezzoRimessaggio) -
+            numero(rimessaggio.acconto)
+        )
+      );
+    },
+    0
+  );
+
+  return saldoLavori + saldoRimessaggi;
+};
+
+const clientiFiltratiSelezione = clientiRicercatiLavoro.filter(
+  (cliente) => {
+    const nomeCliente = normalizzaNomeCliente(cliente.cliente);
+
+    const lavoriCliente = lavori.filter(
+      (lavoro) =>
+        normalizzaNomeCliente(lavoro.cliente) === nomeCliente
+    );
+
+    const rimessaggiCliente = rimessaggi.filter(
+      (rimessaggio) =>
+        normalizzaNomeCliente(rimessaggio.cliente) === nomeCliente
+    );
+
+    const haArchiviati =
+      lavoriCliente.some((lavoro) => lavoro.archiviato) ||
+      rimessaggiCliente.some(
+        (rimessaggio) => rimessaggio.archiviato
+      );
+
+    if (filtroClienti === "Con lavori") {
+      return lavoriCliente.length > 0;
+    }
+
+    if (filtroClienti === "Con rimessaggi") {
+      return rimessaggiCliente.length > 0;
+    }
+
+    if (filtroClienti === "Con archiviati") {
+      return haArchiviati;
+    }
+
+    if (filtroClienti === "Da incassare") {
+      return saldoCliente(cliente) > 0;
+    }
+
+    return true;
+  }
+);
+
+const clientiOrdinati = [...clientiFiltratiSelezione];
 
 if (ordinaClientiPerSaldo) {
-  clientiOrdinati.sort((a, b) => {
-    const saldoCliente = (cliente) => {
-      const lavoriCliente = lavori.filter(
-        (lavoro) => lavoro.cliente === cliente.cliente
-      );
-
-      const rimessaggiCliente = rimessaggi.filter(
-        (rimessaggio) => rimessaggio.cliente === cliente.cliente
-      );
-
-      const saldoLavori = lavoriCliente.reduce((totale, lavoro) => {
-        if (
-          lavoro.pagamento === "Pagato" ||
-          lavoro.pagamento === "Fatturato"
-        ) {
-          return totale;
-        }
-
-       const totaleLavoro =
-  numero(lavoro.costoRicambi) +
-  numero(lavoro.altro);
-
-        return totale + Math.max(
-          0,
-          totaleLavoro - numero(lavoro.acconto)
-        );
-      }, 0);
-
-      const saldoRimessaggi = rimessaggiCliente.reduce(
-        (totale, rimessaggio) => {
-          if (
-            rimessaggio.pagamento === "Pagato" ||
-            rimessaggio.pagamento === "Fatturato"
-          ) {
-            return totale;
-          }
-
-          return totale + Math.max(
-            0,
-            numero(rimessaggio.prezzoRimessaggio) -
-              numero(rimessaggio.acconto)
-          );
-        },
-        0
-      );
-
-      return saldoLavori + saldoRimessaggi;
-    };
-
-    return saldoCliente(b) - saldoCliente(a);
-  });
+  clientiOrdinati.sort(
+    (a, b) => saldoCliente(b) - saldoCliente(a)
+  );
 }
 else {
   clientiOrdinati.sort((a, b) =>
@@ -5146,6 +5210,14 @@ else {
     filtroAnno={filtroAnnoRimessaggi}
     filtroPagamento={filtroPagamentoRimessaggi}
     filtroStato={filtroStatoBarcaRimessaggi}
+  />
+)}
+{stampaElencoClienti && (
+  <ElencoClientiStampabile
+    clienti={clientiOrdinati}
+    filtroClienti={filtroClienti}
+    lavori={lavori}
+    rimessaggi={rimessaggi}
   />
 )}
 {rimessaggioDaStampare && (
@@ -5964,7 +6036,7 @@ left: "250px",
         cursor: "pointer",
       }}
     >
-      PDF Lavori aperti
+      Crea Pdf
     </button>
   </div>
 )}
@@ -6689,7 +6761,7 @@ left: "250px",
     }, 300);
   }}
 >
-  📄 PDF Rimessaggi
+  📄 Crea Pdf
 </button>
 
 </div>
@@ -11754,7 +11826,17 @@ width: "100%",
     setForm({ ...form, stato: v })
   }
 />
-
+<Input
+  label="Data ingresso"
+  type="date"
+  value={form.ingresso || ""}
+  onChange={(v) =>
+    setForm({
+      ...form,
+      ingresso: v,
+    })
+  }
+/>
 <Input
   label="Consegna"
   type="date"
@@ -12777,7 +12859,21 @@ padding: "10px",
       padding: "10px",
     }}
   />
-
+<select
+  value={filtroClienti}
+  onChange={(e) => setFiltroClienti(e.target.value)}
+  style={{
+    padding: "10px 12px",
+    border: "1px solid #cbd5e1",
+    borderRadius: "8px",
+    background: "#ffffff",
+    fontWeight: "600",
+    whiteSpace: "nowrap",
+  }}
+>
+  <option value="Tutti">Tutti i clienti</option>
+<option value="Da incassare">Da incassare</option>
+</select>
   <button
     type="button"
     onClick={() =>
@@ -12795,21 +12891,78 @@ padding: "10px",
     }}
   >
     {ordinaClientiPerSaldo
-      ? "Ordine normale"
-      : "Ordina per saldo"}
-  </button>
+  ? "Ordine normale"
+  : "Ordina per saldo"}
+</button>
+
+<button
+  type="button"
+  onClick={() => {
+    setStampaElencoClienti(true);
+
+    setTimeout(() => {
+      window.print();
+      setStampaElencoClienti(false);
+    }, 300);
+  }}
+  style={{
+    padding: "10px 14px",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "700",
+    whiteSpace: "nowrap",
+    background: "#2563eb",
+    color: "#ffffff",
+  }}
+>
+  Crea PDF
+</button>
+
 </div>
+
     {clientiOrdinati.map((cliente) => {
-      const lavoriCliente = lavori.filter(
-        (lavoro) => lavoro.cliente === cliente.cliente
-      );
+      const lavoriCliente = lavori.filter((lavoro) => {
+  const nomeLavoro = String(lavoro.cliente || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .sort()
+    .join(" ");
+
+  const nomeCliente = String(cliente.cliente || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .sort()
+    .join(" ");
+
+  return nomeLavoro === nomeCliente;
+});
 
       const preventiviCliente = preventivi.filter(
         (preventivo) => preventivo.cliente === cliente.cliente
       );
-      const rimessaggiCliente = rimessaggi.filter(
-  (rimessaggio) => rimessaggio.cliente === cliente.cliente
-);
+      const rimessaggiCliente = rimessaggi.filter((rimessaggio) => {
+  const nomeRimessaggio = String(rimessaggio.cliente || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .sort()
+    .join(" ");
+
+  const nomeCliente = String(cliente.cliente || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .sort()
+    .join(" ");
+
+  return nomeRimessaggio === nomeCliente;
+});
+const archiviatiCliente =
+  lavoriCliente.filter((lavoro) => lavoro.archiviato).length +
+  rimessaggiCliente.filter((rimessaggio) => rimessaggio.archiviato).length;
 const saldoLavoriCliente = lavoriCliente.reduce((totale, lavoro) => {
   if (
     lavoro.pagamento === "Pagato" ||
@@ -12941,10 +13094,11 @@ const saldoTotaleCliente =
   }}
 >
   <div>
-    Lavori: <strong>{lavoriCliente.length}</strong> | Preventivi:{" "}
-    <strong>{preventiviCliente.length}</strong> | Rimessaggi:{" "}
-    <strong>{rimessaggiCliente.length}</strong>
-  </div>
+  Lavori: <strong>{lavoriCliente.length}</strong> | Preventivi:{" "}
+  <strong>{preventiviCliente.length}</strong> | Rimessaggi:{" "}
+  <strong>{rimessaggiCliente.length}</strong> | Archiviati:{" "}
+  <strong>{archiviatiCliente}</strong>
+</div>
 
   <div
     style={{
@@ -13037,6 +13191,7 @@ const saldoTotaleCliente =
     <h3>Storico cliente</h3>
 
     <div style={{ marginTop: "12px" }}>
+      
       <strong>Lavori ({lavoriCliente.length})</strong>
 
       {lavoriCliente.length === 0 ? (
@@ -13053,7 +13208,18 @@ const saldoTotaleCliente =
             <button
   type="button"
   onClick={() => {
-    setClienteOrigineScheda(cliente.firebaseId);
+  if (lavoro.archiviato) {
+    setLavoroDaStampare(lavoro);
+
+    setTimeout(() => {
+      window.print();
+      setLavoroDaStampare(null);
+    }, 300);
+
+    return;
+  }
+
+  setClienteOrigineScheda(cliente.firebaseId);
   setVista("lavori");
   setForm({ ...lavoro });
   setLavoroInModifica(lavoro.firebaseId);
@@ -13165,7 +13331,23 @@ const saldoTotaleCliente =
             <button
   type="button"
   onClick={() => {
-    setClienteOrigineScheda(cliente.firebaseId);
+  if (rimessaggio.archiviato) {
+    setLavoroDaStampare(null);
+    setPreventivoDaStampare(null);
+    setStampaElencoLavori(false);
+    setStampaElencoRimessaggi(false);
+
+    setRimessaggioDaStampare(rimessaggio);
+
+    setTimeout(() => {
+      window.print();
+      setRimessaggioDaStampare(null);
+    }, 300);
+
+    return;
+  }
+
+  setClienteOrigineScheda(cliente.firebaseId);
   setVista("rimessaggi");
   setForm({ ...rimessaggio });
   setRimessaggioInModifica(rimessaggio.firebaseId);
@@ -14867,8 +15049,8 @@ function ElencoRimessaggiStampabile({
         </thead>
 
         <tbody>
-          {rimessaggi.map((r) => (
-            <tr key={r.firebaseId}>
+  {rimessaggi.map((r) => (
+    <tr key={r.firebaseId}>
               <td style={{ border: "1px solid #000", padding: "6px" }}>
                 {r.cliente || "-"}
               </td>
@@ -14915,8 +15097,394 @@ function ElencoRimessaggiStampabile({
           fontWeight: "bold",
         }}
       >
-        Totale rimessaggi: {rimessaggi.length}
+       Totale rimessaggi: {rimessaggi.length}
       </div>
+    </div>
+  );
+}
+function ElencoClientiStampabile({
+  clienti,
+  filtroClienti,
+  lavori,
+  rimessaggi,
+}) {
+  return (
+    <div className="printArea">
+      <style>
+        {`
+          @media print {
+            @page {
+              size: A4 landscape;
+              margin: 10mm;
+            }
+          }
+        `}
+      </style>
+
+      <div className="printHeader">
+        <h1>Servizi Nautici Zenith</h1>
+
+        <div
+          style={{
+            textAlign: "right",
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+            }}
+          >
+            Elenco Clienti
+          </h2>
+
+          <div
+            style={{
+              marginTop: "4px",
+              fontSize: "12px",
+              fontWeight: "600",
+              color: "#475569",
+            }}
+          >
+            <strong>Filtro:</strong>{" "}
+            {filtroClienti === "Da incassare"
+              ? "Clienti da incassare"
+              : "Tutti i clienti"}
+          </div>
+        </div>
+      </div>
+
+      {filtroClienti === "Da incassare" ? (
+  <table
+    style={{
+      width: "100%",
+      borderCollapse: "collapse",
+      marginTop: "20px",
+      fontSize: "11px",
+      border: "1px solid #000",
+    }}
+  >
+    <thead>
+      <tr>
+        <th style={{ border: "1px solid #000", padding: "6px", width: "22%" }}>
+          Nome e cognome
+        </th>
+
+        <th style={{ border: "1px solid #000", padding: "6px", width: "12%" }}>
+          Telefono
+        </th>
+
+        <th style={{ border: "1px solid #000", padding: "6px", width: "11%" }}>
+          Scheda lavoro
+        </th>
+
+        <th style={{ border: "1px solid #000", padding: "6px", width: "11%" }}>
+          Da incassare lavoro
+        </th>
+
+        <th style={{ border: "1px solid #000", padding: "6px", width: "11%" }}>
+          Scheda rimessaggio
+        </th>
+
+        <th style={{ border: "1px solid #000", padding: "6px", width: "11%" }}>
+          Da incassare rimessaggio
+        </th>
+
+        <th style={{ border: "1px solid #000", padding: "6px", width: "12%" }}>
+          Totale
+        </th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {clienti.map((cliente) => {
+        const normalizzaNome = (valore) =>
+          String(valore || "")
+            .trim()
+            .toLowerCase()
+            .split(/\s+/)
+            .sort()
+            .join(" ");
+
+        const nomeCliente = normalizzaNome(cliente.cliente);
+
+        const lavoriDaIncassare = lavori.filter((lavoro) => {
+          const stessoCliente =
+            normalizzaNome(lavoro.cliente) === nomeCliente;
+
+          const nonPagato =
+            lavoro.pagamento !== "Pagato" &&
+            lavoro.pagamento !== "Fatturato";
+
+          const saldo =
+            numero(lavoro.costoRicambi) +
+            numero(lavoro.altro) -
+            numero(lavoro.acconto);
+
+          return stessoCliente && nonPagato && saldo > 0;
+        });
+
+        const rimessaggiDaIncassare = rimessaggi.filter((rimessaggio) => {
+          const stessoCliente =
+            normalizzaNome(rimessaggio.cliente) === nomeCliente;
+
+          const nonPagato =
+            rimessaggio.pagamento !== "Pagato" &&
+            rimessaggio.pagamento !== "Fatturato";
+
+          const saldo =
+            numero(rimessaggio.prezzoRimessaggio) -
+            numero(rimessaggio.acconto);
+
+          return stessoCliente && nonPagato && saldo > 0;
+        });
+
+        const totaleLavori = lavoriDaIncassare.reduce(
+          (totale, lavoro) =>
+            totale +
+            Math.max(
+              0,
+              numero(lavoro.costoRicambi) +
+              numero(lavoro.altro) -
+              numero(lavoro.acconto)
+            ),
+          0
+        );
+
+        const totaleRimessaggi = rimessaggiDaIncassare.reduce(
+          (totale, rimessaggio) =>
+            totale +
+            Math.max(
+              0,
+              numero(rimessaggio.prezzoRimessaggio) -
+              numero(rimessaggio.acconto)
+            ),
+          0
+        );
+
+        const totaleCliente = totaleLavori + totaleRimessaggi;
+
+        return (
+          <tr
+            key={cliente.firebaseId}
+            style={{
+              breakInside: "avoid",
+              pageBreakInside: "avoid",
+            }}
+          >
+            <td style={{ border: "1px solid #000", padding: "6px" }}>
+              {cliente.cliente || "-"}
+            </td>
+
+            <td style={{ border: "1px solid #000", padding: "6px" }}>
+              {cliente.telefono || "-"}
+            </td>
+
+            <td style={{ border: "1px solid #000", padding: "6px" }}>
+              {lavoriDaIncassare.length > 0
+                ? lavoriDaIncassare.map((lavoro) => (
+                    <div key={lavoro.firebaseId}>
+                      {lavoro.id || "-"}
+                    </div>
+                  ))
+                : "-"}
+            </td>
+
+            <td style={{ border: "1px solid #000", padding: "6px" }}>
+              {lavoriDaIncassare.length > 0
+                ? lavoriDaIncassare.map((lavoro) => (
+                    <div key={lavoro.firebaseId}>
+                      {euro(
+                        Math.max(
+                          0,
+                          numero(lavoro.costoRicambi) +
+                          numero(lavoro.altro) -
+                          numero(lavoro.acconto)
+                        )
+                      )}
+                    </div>
+                  ))
+                : "-"}
+            </td>
+
+            <td style={{ border: "1px solid #000", padding: "6px" }}>
+              {rimessaggiDaIncassare.length > 0
+                ? rimessaggiDaIncassare.map((rimessaggio) => (
+                    <div key={rimessaggio.firebaseId}>
+                      {rimessaggio.id || "-"}
+                    </div>
+                  ))
+                : "-"}
+            </td>
+
+            <td style={{ border: "1px solid #000", padding: "6px" }}>
+              {rimessaggiDaIncassare.length > 0
+                ? rimessaggiDaIncassare.map((rimessaggio) => (
+                    <div key={rimessaggio.firebaseId}>
+                      {euro(
+                        Math.max(
+                          0,
+                          numero(rimessaggio.prezzoRimessaggio) -
+                          numero(rimessaggio.acconto)
+                        )
+                      )}
+                    </div>
+                  ))
+                : "-"}
+            </td>
+
+            <td
+              style={{
+                border: "1px solid #000",
+                padding: "6px",
+                fontWeight: "700",
+              }}
+            >
+              {euro(totaleCliente)}
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+) : (
+  <table
+    style={{
+      width: "100%",
+      borderCollapse: "collapse",
+      marginTop: "20px",
+      fontSize: "11px",
+      border: "1px solid #000",
+    }}
+  >
+    <thead>
+      <tr>
+        <th style={{ border: "1px solid #000", padding: "6px" }}>
+          Nome e cognome
+        </th>
+
+        <th style={{ border: "1px solid #000", padding: "6px" }}>
+          Telefono
+        </th>
+
+        <th style={{ border: "1px solid #000", padding: "6px" }}>
+          Imbarcazione
+        </th>
+
+        <th style={{ border: "1px solid #000", padding: "6px" }}>
+          Motore
+        </th>
+
+        <th style={{ border: "1px solid #000", padding: "6px" }}>
+          Matricola
+        </th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {clienti.map((cliente) => (
+        <tr
+          key={cliente.firebaseId}
+          style={{
+            breakInside: "avoid",
+            pageBreakInside: "avoid",
+          }}
+        >
+          <td style={{ border: "1px solid #000", padding: "6px" }}>
+            {cliente.cliente || "-"}
+          </td>
+
+          <td style={{ border: "1px solid #000", padding: "6px" }}>
+            {cliente.telefono || "-"}
+          </td>
+
+          <td style={{ border: "1px solid #000", padding: "6px" }}>
+            {cliente.barca || "-"}
+          </td>
+
+          <td style={{ border: "1px solid #000", padding: "6px" }}>
+            {cliente.motore || "-"}
+          </td>
+
+          <td style={{ border: "1px solid #000", padding: "6px" }}>
+            {cliente.matricola || "-"}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+)}
+
+      <div
+  style={{
+    marginTop: "20px",
+    fontWeight: "bold",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "20px",
+  }}
+>
+  <div>
+  Totale clienti: {clienti.length}
+</div>
+
+{filtroClienti === "Da incassare" && (
+  <div>
+    Totale da incassare:{" "}
+    {euro(
+      clienti.reduce((totaleGenerale, cliente) => {
+        const normalizzaNome = (valore) =>
+          String(valore || "")
+            .trim()
+            .toLowerCase()
+            .split(/\s+/)
+            .sort()
+            .join(" ");
+
+        const nomeCliente = normalizzaNome(cliente.cliente);
+
+        const totaleLavori = lavori
+          .filter(
+            (lavoro) =>
+              normalizzaNome(lavoro.cliente) === nomeCliente &&
+              lavoro.pagamento !== "Pagato" &&
+              lavoro.pagamento !== "Fatturato"
+          )
+          .reduce(
+            (totale, lavoro) =>
+              totale +
+              Math.max(
+                0,
+                numero(lavoro.costoRicambi) +
+                  numero(lavoro.altro) -
+                  numero(lavoro.acconto)
+              ),
+            0
+          );
+
+        const totaleRimessaggi = rimessaggi
+          .filter(
+            (rimessaggio) =>
+              normalizzaNome(rimessaggio.cliente) === nomeCliente &&
+              rimessaggio.pagamento !== "Pagato" &&
+              rimessaggio.pagamento !== "Fatturato"
+          )
+          .reduce(
+            (totale, rimessaggio) =>
+              totale +
+              Math.max(
+                0,
+                numero(rimessaggio.prezzoRimessaggio) -
+                  numero(rimessaggio.acconto)
+              ),
+            0
+          );
+
+        return totaleGenerale + totaleLavori + totaleRimessaggi;
+      }, 0)
+    )}
+  </div>
+)}
+</div>
     </div>
   );
 }
