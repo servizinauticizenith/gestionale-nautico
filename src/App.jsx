@@ -5202,6 +5202,9 @@ else {
 {stampaElencoLavori && (
   <ElencoLavoriStampabile
     lavori={lavoriFiltrati}
+    filtroAnno={filtroAnnoLavori}
+    filtroStato={filtroStato}
+    filtroPagamento={filtroPagamento}
   />
 )}
 {stampaElencoRimessaggi && (
@@ -14631,7 +14634,12 @@ function LavoroStampabile({ lavoro }) {
     </div>
   );
 }
-function ElencoLavoriStampabile({ lavori }) {
+function ElencoLavoriStampabile({
+  lavori,
+  filtroAnno,
+  filtroStato,
+  filtroPagamento,
+}) {
   const lavoriOrdinati = [...lavori].sort((a, b) => {
     if (!a.consegna) return 1;
     if (!b.consegna) return -1;
@@ -14652,10 +14660,46 @@ function ElencoLavoriStampabile({ lavori }) {
   `}
 </style>
       <div className="printHeader">
-        <h1>Servizi Nautici Zenith</h1>
-        <h2>Elenco lavori aperti</h2>
-        <p>Ordinati per data di consegna</p>
+  <h1>Servizi Nautici Zenith</h1>
+
+  <div
+    style={{
+      textAlign: "right",
+    }}
+  >
+    <h2
+      style={{
+        margin: 0,
+      }}
+    >
+      Elenco lavori
+    </h2>
+
+    <div
+      style={{
+        marginTop: "4px",
+        fontSize: "12px",
+        fontWeight: "600",
+        color: "#475569",
+      }}
+    >
+      <div>
+        <strong>Anno:</strong>{" "}
+        {filtroAnno || "Tutti gli anni"}
       </div>
+
+      <div>
+        <strong>Stato:</strong>{" "}
+        {filtroStato || "Tutti"}
+      </div>
+
+      <div>
+        <strong>Pagamento:</strong>{" "}
+        {filtroPagamento || "Tutti"}
+      </div>
+    </div>
+  </div>
+</div>
 
       <table
         style={{
@@ -14716,13 +14760,34 @@ function ElencoLavoriStampabile({ lavori }) {
       </table>
 
       <div
-        style={{
-          marginTop: "20px",
-          fontWeight: "bold",
-        }}
-      >
-        Totale lavori aperti: {lavoriOrdinati.length}
-      </div>
+  style={{
+    marginTop: "20px",
+    fontWeight: "bold",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "20px",
+  }}
+>
+  <div>
+    Totale lavori filtrati: {lavoriOrdinati.length}
+  </div>
+
+  {filtroPagamento === "Non pagato" && (
+    <div>
+      Totale da incassare:{" "}
+      {euro(
+        lavoriOrdinati.reduce((totale, lavoro) => {
+          const saldo =
+            numero(lavoro.costoRicambi) +
+            numero(lavoro.altro) -
+            numero(lavoro.acconto);
+
+          return totale + Math.max(0, saldo);
+        }, 0)
+      )}
+    </div>
+  )}
+</div>
     </div>
   );
 }
