@@ -5209,7 +5209,11 @@ else {
 )}
 {stampaElencoRimessaggi && (
   <ElencoRimessaggiStampabile
-    rimessaggi={rimessaggiFiltrati}
+    rimessaggi={[...rimessaggiFiltrati].sort((a, b) =>
+  (a.cliente || "").localeCompare(b.cliente || "", "it", {
+    sensitivity: "base",
+  })
+)}
     filtroAnno={filtroAnnoRimessaggi}
     filtroPagamento={filtroPagamentoRimessaggi}
     filtroStato={filtroStatoBarcaRimessaggi}
@@ -6756,6 +6760,7 @@ left: "250px",
 <button
   style={{ marginLeft: "10px" }}
   onClick={() => {
+    setLavoroInModifica(null);
     setStampaElencoRimessaggi(true);
 
     setTimeout(() => {
@@ -13818,7 +13823,13 @@ const saldoTotaleCliente =
       marginTop: "20px",
     }}
   >
-    {rimessaggiFiltrati.map((rimessaggio) => (
+    {[...rimessaggiFiltrati]
+  .sort((a, b) =>
+    (a.cliente || "").localeCompare(b.cliente || "", "it", {
+      sensitivity: "base",
+    })
+  )
+  .map((rimessaggio) => (
   <article
     className="job lavoro"
     key={rimessaggio.firebaseId}
