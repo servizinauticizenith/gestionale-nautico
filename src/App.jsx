@@ -201,10 +201,7 @@ versamenti: [],
   const [ricercaClienteLavoro, setRicercaClienteLavoro] = useState("");
   const [filtroStato, setFiltroStato] = useState("Tutti");
   const [filtroPagamento, setFiltroPagamento] = useState("Tutti");
-  const [filtroAnnoLavori, setFiltroAnnoLavori] = useState(
-  new Date().getFullYear().toString()
-);
-const [filtroAnnoRimessaggi, setFiltroAnnoRimessaggi] = useState(
+  const [filtroAnnoRimessaggi, setFiltroAnnoRimessaggi] = useState(
   new Date().getFullYear().toString()
 );
 
@@ -4741,27 +4738,18 @@ telefono:
       filtroPagamento === "Tutti" ||
       pagamentoLavoro === filtroPagamento;
 
-    const annoLavoro = lavoro.ingresso
-      ? new Date(lavoro.ingresso).getFullYear().toString()
-      : "";
-
-    const matchAnno =
-      filtroAnnoLavori === "Tutti" ||
-      annoLavoro === filtroAnnoLavori;
-
+    
     return (
-      matchRicerca &&
-      matchStato &&
-      matchPagamento &&
-      matchAnno
-    );
+  matchRicerca &&
+  matchStato &&
+  matchPagamento
+);
   });
 }, [
   lavori,
   ricerca,
   filtroStato,
   filtroPagamento,
-  filtroAnnoLavori,
 ]);
   
 
@@ -4902,20 +4890,43 @@ totaleRimessaggiDaIncassare: rimessaggi
 
   preventivi: preventivi.length,
 
-  daIncassare: lavori.filter(
-    (l) => (l.pagamento || "Non pagato") === "Non pagato"
-  ).length,
-  totaleDaIncassare: lavori
-  .filter(
-    (l) => (l.pagamento || "Non pagato") === "Non pagato"
-  )
-  .reduce((totale, l) => {
-  const totaleLavoro =
-    numero(l.costoRicambi) +
-    numero(l.altro);
+  daIncassare: lavori.filter((l) => {
+  if (l.archiviato) return false;
 
+  const pagamentoLavoro = l.pagamento || "Non pagato";
+
+  return (
+  pagamentoLavoro === "Non pagato" &&
+  (l.stato || "").trim().toLowerCase() === "terminato"
+);
+}).length,
+
+totaleDaIncassare: lavori
+  .filter((l) => {
+    if (l.archiviato) return false;
+
+    const pagamentoLavoro = l.pagamento || "Non pagato";
+
+    return (
+  pagamentoLavoro === "Non pagato" &&
+  (l.stato || "").trim().toLowerCase() === "terminato"
+);
+  })
+  .reduce((totale, l) => {
     const saldo =
-      totaleLavoro - numero(l.acconto);
+      (l.ricambiDettaglio || []).reduce(
+        (somma, ricambio) =>
+          somma +
+          numero(ricambio.quantita) *
+            numero(ricambio.prezzo),
+        0
+      ) +
+      numero(l.altro) -
+      (l.acconti || []).reduce(
+        (somma, acconto) =>
+          somma + numero(acconto.importo),
+        0
+      );
 
     return totale + Math.max(0, saldo);
   }, 0),
@@ -5202,7 +5213,6 @@ else {
 {stampaElencoLavori && (
   <ElencoLavoriStampabile
     lavori={lavoriFiltrati}
-    filtroAnno={filtroAnnoLavori}
     filtroStato={filtroStato}
     filtroPagamento={filtroPagamento}
   />
@@ -5976,22 +5986,7 @@ left: "250px",
       flexWrap: "wrap",
     }}
   >
-    <select
-      value={filtroAnnoLavori}
-      onChange={(e) => setFiltroAnnoLavori(e.target.value)}
-      style={{
-        padding: "8px 10px",
-        border: "1px solid #cbd5e1",
-        borderRadius: "8px",
-        background: "white",
-      }}
-    >
-      <option value="Tutti">Tutti gli anni</option>
-      <option value="2026">2026</option>
-      <option value="2025">2025</option>
-      <option value="2024">2024</option>
-    </select>
-
+    
     <select
       value={filtroStato}
       onChange={(e) => setFiltroStato(e.target.value)}
@@ -14694,11 +14689,7 @@ function ElencoLavoriStampabile({
         color: "#475569",
       }}
     >
-      <div>
-        <strong>Anno:</strong>{" "}
-        {filtroAnno || "Tutti gli anni"}
-      </div>
-
+      
       <div>
         <strong>Stato:</strong>{" "}
         {filtroStato || "Tutti"}
@@ -14713,61 +14704,85 @@ function ElencoLavoriStampabile({
 </div>
 
       <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          marginTop: "20px",
-        }}
-      >
+  style={{
+    width: "100%",
+    borderCollapse: "collapse",
+    marginTop: "20px",
+    fontSize: "11px",
+  }}
+>
         <thead>
-          <tr>
-            <th style={{ border: "1px solid #000", padding: "8px" }}>
-              Entrata
-            </th>
+  <tr>
+    <th style={{ border: "1px solid #000", padding: "8px" }}>
+      Cognome e nome
+    </th>
 
-            <th style={{ border: "1px solid #000", padding: "8px" }}>
-              Cliente
-            </th>
+    <th style={{ border: "1px solid #000", padding: "8px" }}>
+      Imbarcazione
+    </th>
 
-            <th style={{ border: "1px solid #000", padding: "8px" }}>
-              Imbarcazione
-            </th>
+    <th style={{ border: "1px solid #000", padding: "8px" }}>
+      Motore
+    </th>
 
-            <th style={{ border: "1px solid #000", padding: "8px" }}>
-              Telefono
-            </th>
+    <th style={{ border: "1px solid #000", padding: "8px" }}>
+      Telefono
+    </th>
 
-            <th style={{ border: "1px solid #000", padding: "8px" }}>
-              Consegna
-            </th>
-          </tr>
-        </thead>
+    <th style={{ border: "1px solid #000", padding: "8px" }}>
+      Importo
+    </th>
+  </tr>
+</thead>
 
         <tbody>
-          {lavoriOrdinati.map((l) => (
-            <tr key={l.firebaseId}>
-              <td style={{ border: "1px solid #000", padding: "6px" }}>
-                {formatData(l.ingresso)}
-              </td>
+  {lavoriOrdinati
+    .sort((a, b) =>
+      (a.cliente || "").localeCompare(b.cliente || "", "it", {
+        sensitivity: "base",
+      })
+    )
+    .map((l) => {
+      const saldo =
+        (l.ricambiDettaglio || []).reduce(
+          (somma, ricambio) =>
+            somma +
+            numero(ricambio.quantita) *
+              numero(ricambio.prezzo),
+          0
+        ) +
+        numero(l.altro) -
+        (l.acconti || []).reduce(
+          (somma, acconto) =>
+            somma + numero(acconto.importo),
+          0
+        );
 
-              <td style={{ border: "1px solid #000", padding: "6px" }}>
-                {l.cliente}
-              </td>
+      return (
+        <tr key={l.firebaseId}>
+          <td style={{ border: "1px solid #000", padding: "6px" }}>
+            {l.cliente || "-"}
+          </td>
 
-              <td style={{ border: "1px solid #000", padding: "6px" }}>
-                {l.barca}
-              </td>
+          <td style={{ border: "1px solid #000", padding: "6px" }}>
+            {l.barca || "-"}
+          </td>
 
-              <td style={{ border: "1px solid #000", padding: "6px" }}>
-                {l.telefono}
-              </td>
+          <td style={{ border: "1px solid #000", padding: "6px" }}>
+            {l.motore || "-"}
+          </td>
 
-              <td style={{ border: "1px solid #000", padding: "6px" }}>
-                {formatData(l.consegna)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
+          <td style={{ border: "1px solid #000", padding: "6px" }}>
+            {l.telefono || "-"}
+          </td>
+
+          <td style={{ border: "1px solid #000", padding: "6px" }}>
+            {euro(Math.max(0, saldo))}
+          </td>
+        </tr>
+      );
+    })}
+</tbody>
       </table>
 
       <div
@@ -14789,9 +14804,19 @@ function ElencoLavoriStampabile({
       {euro(
         lavoriOrdinati.reduce((totale, lavoro) => {
           const saldo =
-            numero(lavoro.costoRicambi) +
-            numero(lavoro.altro) -
-            numero(lavoro.acconto);
+  (lavoro.ricambiDettaglio || []).reduce(
+    (somma, ricambio) =>
+      somma +
+      numero(ricambio.quantita) *
+        numero(ricambio.prezzo),
+    0
+  ) +
+  numero(lavoro.altro) -
+  (lavoro.acconti || []).reduce(
+    (somma, acconto) =>
+      somma + numero(acconto.importo),
+    0
+  );
 
           return totale + Math.max(0, saldo);
         }, 0)
@@ -15063,10 +15088,7 @@ function ElencoRimessaggiStampabile({
     color: "#475569",
   }}
 >
-  <div>
-  <strong>Anno:</strong>{" "}
-  {filtroAnno || "Tutti gli anni"}
-</div>
+
 
 <div>
   <strong>Pagamento:</strong>{" "}
@@ -15115,7 +15137,7 @@ function ElencoRimessaggiStampabile({
             </th>
 
             <th style={{ border: "1px solid #000", padding: "6px" }}>
-              Luogo consegna
+              Importo
             </th>
 
             <th style={{ border: "1px solid #000", padding: "6px" }}>
@@ -15156,8 +15178,8 @@ function ElencoRimessaggiStampabile({
               </td>
 
               <td style={{ border: "1px solid #000", padding: "6px" }}>
-                {r.luogoConsegna || "-"}
-              </td>
+  {euro(numero(r.prezzoRimessaggio))}
+</td>
 
               <td style={{ border: "1px solid #000", padding: "6px" }}>
                 {r.pagamento || "Da pagare"}
@@ -15168,13 +15190,28 @@ function ElencoRimessaggiStampabile({
       </table>
 
       <div
-        style={{
-          marginTop: "20px",
-          fontWeight: "bold",
-        }}
-      >
-       Totale rimessaggi: {rimessaggi.length}
-      </div>
+  style={{
+    marginTop: "20px",
+    fontWeight: "bold",
+    display: "flex",
+    justifyContent: "space-between",
+  }}
+>
+  <span>Totale rimessaggi: {rimessaggi.length}</span>
+
+  <span>
+    Totale da incassare:{" "}
+    {euro(
+      rimessaggi.reduce((totale, r) => {
+        const saldo =
+          numero(r.prezzoRimessaggio) -
+          numero(r.acconto);
+
+        return totale + Math.max(0, saldo);
+      }, 0)
+    )}
+  </span>
+</div>
     </div>
   );
 }
