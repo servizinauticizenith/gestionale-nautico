@@ -9450,6 +9450,7 @@ versamenti: allievo.versamenti || [],
       type="number"
       step="0.01"
       min="0"
+      onWheel={(e) => e.currentTarget.blur()}
       value={formAllievo.costoCorso}
       onChange={(e) =>
         setFormAllievo({
@@ -9527,6 +9528,7 @@ versamenti: allievo.versamenti || [],
         type="number"
         step="0.01"
         min="0"
+        onWheel={(e) => e.currentTarget.blur()}
         value={nuovoVersamento.importo}
         onChange={(e) =>
           setNuovoVersamento({
