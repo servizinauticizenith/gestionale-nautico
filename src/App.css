@@ -972,6 +972,10 @@ input[type="number"] {
   gap: 10px;
   z-index: 1000;
 }
+.sidebarMenuScuola {
+  box-sizing: border-box;
+}
+
 
 .sidebarMenu button {
   width: 100%;
@@ -1194,4 +1198,40 @@ input[type="number"] {
 .sidebarSectionSwitch button.activeSection {
   background: #2563eb;
   color: #ffffff;
+}
+.pannelloCorsiAllievi {
+  position: fixed;
+  top: 145px;
+  left: 220px;
+  width: 285px;
+  max-height: calc(100vh - 165px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 14px !important;
+  background: #163b66;
+  border-radius: 0 12px 12px 0;
+  box-shadow: 4px 4px 14px rgba(0, 0, 0, 0.18);
+  z-index: 1001;
+}
+
+.pannelloCorsiAllievi > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.pannelloCorsiAllievi > div > button:first-child {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pannelloCorsiAllievi > div > button:not(:first-child) {
+  width: 30px;
+  flex-shrink: 0;
+  padding: 6px 2px;
 }

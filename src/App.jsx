@@ -97,6 +97,149 @@ const [ricambioInModifica, setRicambioInModifica] = useState(null);
 const [mostraFormRicambio, setMostraFormRicambio] = useState(false);
   const [clientiDb, setClientiDb] = useState([]);
   const [allievi, setAllievi] = useState([]);
+  const [corsiAllievi, setCorsiAllievi] = useState([]);
+const [corsoAllieviSelezionato, setCorsoAllieviSelezionato] = useState("generale");
+const [menuAllieviAperto, setMenuAllieviAperto] = useState(false);
+const [menuGruppiAperto, setMenuGruppiAperto] = useState(false);
+const [corsoGruppiSelezionato, setCorsoGruppiSelezionato] = useState("");
+const [mostraCorsiArchiviati, setMostraCorsiArchiviati] = useState(false);
+const creaNuovoCorso = async () => {
+  const nome = window.prompt(
+    "Inserisci il nome del nuovo corso (es. Ottobre 2026)"
+  );
+
+  if (!nome || !nome.trim()) return;
+
+  const nomePulito = nome.trim();
+
+  const duplicato = corsiAllievi.some(
+    (corso) =>
+      (corso.nome || "").trim().toLowerCase() ===
+      nomePulito.toLowerCase()
+  );
+
+  if (duplicato) {
+    alert("Attenzione: esiste già un corso con questo nome.");
+    return;
+  }
+
+  try {
+    await addDoc(collection(db, "corsiAllievi"), {
+      nome: nomePulito,
+      archiviato: false,
+      creatoIl: new Date().toISOString(),
+    });
+
+    alert("Corso creato correttamente!");
+  } catch (errore) {
+    console.error("Errore creazione corso:", errore);
+    alert("Errore durante la creazione del corso.");
+  }
+};
+const rinominaCorso = async (corso) => {
+  const nuovoNome = window.prompt(
+    "Modifica il nome del corso:",
+    corso.nome
+  );
+
+  if (!nuovoNome || !nuovoNome.trim()) return;
+
+  const nomePulito = nuovoNome.trim();
+
+  if (nomePulito === corso.nome) return;
+
+  const duplicato = corsiAllievi.some(
+    (altro) =>
+      altro.firebaseId !== corso.firebaseId &&
+      (altro.nome || "").trim().toLowerCase() ===
+        nomePulito.toLowerCase()
+  );
+
+  if (duplicato) {
+    alert("Esiste già un corso con questo nome.");
+    return;
+  }
+
+  try {
+    await updateDoc(
+      doc(db, "corsiAllievi", corso.firebaseId),
+      { nome: nomePulito }
+    );
+
+    alert("Nome del corso aggiornato!");
+  } catch (errore) {
+    console.error(errore);
+    alert("Errore durante la modifica del corso.");
+  }
+};
+
+const cambiaArchivioCorso = async (corso) => {
+  const nuovoStato = !corso.archiviato;
+
+  const conferma = window.confirm(
+    nuovoStato
+      ? `Vuoi archiviare il corso "${corso.nome}"? Gli allievi non verranno cancellati.`
+      : `Vuoi riattivare il corso "${corso.nome}"?`
+  );
+
+  if (!conferma) return;
+
+  try {
+    await updateDoc(
+      doc(db, "corsiAllievi", corso.firebaseId),
+      { archiviato: nuovoStato }
+    );
+
+    if (nuovoStato) {
+      setCorsoAllieviSelezionato("generale");
+    }
+
+    alert(
+      nuovoStato
+        ? "Corso archiviato correttamente!"
+        : "Corso riattivato correttamente!"
+    );
+  } catch (errore) {
+    console.error(errore);
+    alert("Errore durante l'operazione.");
+  }
+};
+const eliminaCorso = async (corso) => {
+  try {
+    // Controlla direttamente su Firebase tutti gli allievi
+    const snapshot = await getDocs(collection(db, "allievi"));
+
+    const allieviAssociati = snapshot.docs.filter(
+      (documento) =>
+        documento.data().corsoAppartenenza === corso.firebaseId
+    );
+
+    if (allieviAssociati.length > 0) {
+      alert(
+        `Impossibile eliminare "${corso.nome}".\n\n` +
+        `Il corso contiene ${allieviAssociati.length} allievi.\n` +
+        `Per eliminarlo deve essere completamente vuoto.`
+      );
+      return;
+    }
+
+    const conferma = window.confirm(
+      `Vuoi eliminare definitivamente il corso "${corso.nome}"?\n\n` +
+      `Questa operazione non può essere annullata.`
+    );
+
+    if (!conferma) return;
+
+    await deleteDoc(doc(db, "corsiAllievi", corso.firebaseId));
+
+    setCorsoAllieviSelezionato("generale");
+
+    alert("Corso eliminato correttamente!");
+  } catch (errore) {
+    console.error(errore);
+    alert("Errore durante l'eliminazione. Nessun corso eliminato.");
+  }
+};
   const [allieviSelezionatiEsame, setAllieviSelezionatiEsame] = useState([]);
   const [filtroCorsoEsami, setFiltroCorsoEsami] = useState("Tutti");
   const [filtroTipoCorso, setFiltroTipoCorso] = useState("Tutti");
@@ -192,8 +335,10 @@ tipoPatente: "",
   autocertificazione: false,
 },
 tipoCorso: "",
-  costoCorso: "",
+corsoAppartenenza: "",
+costoCorso: "",
 versamenti: [],
+note: "",
 });
   const [preventivoInModifica, setPreventivoInModifica] = useState(null);
   const [mostraFormPreventivo, setMostraFormPreventivo] = useState(false);
@@ -283,6 +428,20 @@ setTimeout(() => {
       setAllievi(dati);
     }
   );
+  const stopCorsiAllievi = onSnapshot(
+  collection(db, "corsiAllievi"),
+  (snapshot) => {
+    const dati = snapshot.docs.map((documento) => ({
+      ...documento.data(),
+      firebaseId: documento.id,
+    }));
+
+    setCorsiAllievi(dati);
+  },
+  (errore) => {
+    console.error("Errore caricamento corsi allievi:", errore);
+  }
+);
 
   let stopLavori = null;
   let stopRimessaggi = null;
@@ -363,6 +522,7 @@ setTimeout(() => {
 
   return () => {
   stopAllievi();
+  stopCorsiAllievi();
 
   if (stopLavori) stopLavori();
   if (stopPreventivi) stopPreventivi();
@@ -1919,6 +2079,41 @@ if (documentiMancanti.length === 0) {
     y += 7;
   });
 }
+// NOTE ALLIEVO
+if (allievo.note && allievo.note.trim()) {
+  y += 12;
+
+  const righeNote = pdf.splitTextToSize(
+    allievo.note,
+    165
+  );
+
+  // Controlla lo spazio per il titolo
+  if (y + 15 > 280) {
+    pdf.addPage();
+    y = 20;
+  }
+
+  pdf.setTextColor(0, 0, 0);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+  pdf.text("NOTE ALLIEVO", 20, y);
+
+  y += 10;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+
+  righeNote.forEach((riga) => {
+    if (y > 280) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    pdf.text(riga, 20, y);
+    y += 6;
+  });
+}
   const pdfBlob = pdf.output("blob");
   const pdfUrl = URL.createObjectURL(pdfBlob);
 
@@ -2121,8 +2316,111 @@ setAllieviSelezionatiEsame([]);
 
   window.open(pdfUrl, "_blank");
 }
+function generaPdfElencoCorso() {
+  const corso = corsiAllievi.find(
+    (c) => c.firebaseId === corsoAllieviSelezionato
+  );
+
+  if (!corso) {
+    alert("Seleziona un corso da stampare.");
+    return;
+  }
+
+  const iscritti = allievi
+    .filter(
+      (allievo) =>
+        !allievo.archiviato &&
+        allievo.corsoAppartenenza === corsoAllieviSelezionato
+    )
+    .sort((a, b) => {
+      const confronto = (a.cognome || "").localeCompare(
+        b.cognome || "",
+        "it",
+        { sensitivity: "base" }
+      );
+
+      return confronto !== 0
+        ? confronto
+        : (a.nome || "").localeCompare(b.nome || "", "it");
+    });
+
+  const pdf = new jsPDF();
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+  pdf.text("ELENCO ALLIEVI", 105, 20, { align: "center" });
+
+  pdf.setFontSize(12);
+  pdf.text(corso.nome, 105, 29, { align: "center" });
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.text(
+    `Data: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    38,
+    { align: "right" }
+  );
+
+  pdf.line(20, 43, 190, 43);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+  pdf.text(`Totale iscritti: ${iscritti.length}`, 20, 52);
+
+  let y = 65;
+
+  iscritti.forEach((allievo, indice) => {
+    if (y > 270) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    const nominativo =
+      `${allievo.cognome || ""} ${allievo.nome || ""}`.trim();
+
+    const tipoCorso = allievo.tipoCorso || "Non specificato";
+    const gruppo = allievo.gruppo || "Non assegnato";
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.text(`${indice + 1}. ${nominativo}`, 20, y);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+
+    const righeTipoCorso = pdf.splitTextToSize(
+  `Tipo corso: ${tipoCorso}`,
+  160
+);
+
+pdf.text(righeTipoCorso, 27, y + 6);
+
+const yGruppo = y + 6 + righeTipoCorso.length * 5;
+
+pdf.text(`Gruppo: ${gruppo}`, 27, yGruppo);
+
+y += 17 + (righeTipoCorso.length - 1) * 5;
+  });
+
+  if (iscritti.length === 0) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.text("Nessun allievo iscritto a questo corso.", 20, 65);
+  }
+
+  const nomeFile = corso.nome
+    .replace(/[^a-zA-Z0-9]/g, "_")
+    .replace(/_+/g, "_");
+
+  window.open(pdf.output("bloburl"), "_blank");
+}
 function generaPdfGruppiAllievi() {
   const pdf = new jsPDF();
+  const nomeCorsoGruppi =
+  corsiAllievi.find(
+    (corso) => corso.firebaseId === corsoGruppiSelezionato
+  )?.nome || "Corso non selezionato";
 
   const gruppi = [
     "Lunedì",
@@ -2136,11 +2434,11 @@ function generaPdfGruppiAllievi() {
   pdf.setFontSize(17);
 
   pdf.text(
-    "GRUPPI ALLIEVI",
-    105,
-    20,
-    { align: "center" }
-  );
+  `GRUPPI ALLIEVI - ${nomeCorsoGruppi}`,
+  105,
+  20,
+  { align: "center" }
+);
 
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
@@ -2157,18 +2455,19 @@ function generaPdfGruppiAllievi() {
   let y = 48;
 
   gruppi.forEach((gruppo) => {
-    const allieviGruppo = allievi
-      .filter(
-        (allievo) =>
-          !allievo.archiviato &&
-          allievo.gruppo === gruppo
+  const allieviGruppo = allievi
+    .filter(
+      (allievo) =>
+        !allievo.archiviato &&
+        allievo.gruppo === gruppo &&
+        allievo.corsoAppartenenza === corsoGruppiSelezionato
+    )
+    .sort((a, b) =>
+      (a.cognome || "").localeCompare(
+        b.cognome || "",
+        "it"
       )
-      .sort((a, b) =>
-        (a.cognome || "").localeCompare(
-          b.cognome || "",
-          "it"
-        )
-      );
+    );
 
     if (y > 245) {
       pdf.addPage();
@@ -3037,7 +3336,10 @@ async function creaBackupDati() {
   const preventiviBackup = await leggiRaccolta("preventivi");
   const rimessaggiBackup = await leggiRaccolta("rimessaggi");
   const allieviBackup = await leggiRaccolta("allievi");
+  const corsiAllieviBackup = await leggiRaccolta("corsiAllievi");
   const contatoriBackup = await leggiRaccolta("contatori");
+  const ricambiAccessoriBackup = await leggiRaccolta("ricambiAccessori");
+  const utentiBackup = await leggiRaccolta("utenti");
 
   const backup = {
     dataBackup: new Date().toISOString(),
@@ -3046,7 +3348,10 @@ async function creaBackupDati() {
     preventivi: preventiviBackup,
     rimessaggi: rimessaggiBackup,
     allievi: allieviBackup,
+    corsiAllievi: corsiAllieviBackup,
     contatori: contatoriBackup,
+    ricambiAccessori: ricambiAccessoriBackup,
+    utenti: utentiBackup,
   };
   
 
@@ -3093,7 +3398,10 @@ async function ripristinaBackupDati(backup) {
   await ripristinaRaccolta("preventivi", backup.preventivi);
   await ripristinaRaccolta("rimessaggi", backup.rimessaggi);
   await ripristinaRaccolta("allievi", backup.allievi);
+  await ripristinaRaccolta("corsiAllievi", backup.corsiAllievi);
   await ripristinaRaccolta("contatori", backup.contatori);
+  await ripristinaRaccolta("ricambiAccessori", backup.ricambiAccessori);
+  await ripristinaRaccolta("utenti", backup.utenti);
 }
 function generaOrdinePDF(ordine) {
   const pdf = new jsPDF({
@@ -5473,6 +5781,55 @@ reader.readAsText(file);
     </button>
   </div>
 )}
+{sezione === "scuola" && vista === "dashboardScuola" && (
+  <div
+  style={{
+    display: "flex",
+    justifyContent: "center",
+    gap: "12px",
+    margin: "20px 0",
+  }}
+>
+    <button
+      type="button"
+      onClick={() => {
+  setMenuAllieviAperto(false);
+  setMenuGruppiAperto(false);
+  setVista("archivioAllievi");
+}}
+      style={{
+        padding: "12px 22px",
+        border: "none",
+        borderRadius: "10px",
+        background: "#475569",
+        color: "#ffffff",
+        fontWeight: "700",
+        cursor: "pointer",
+      }}
+    >
+      📦 Archivio allievi
+    </button>
+        <button
+      type="button"
+      onClick={() => {
+  setMenuAllieviAperto(false);
+  setMenuGruppiAperto(false);
+  setVista("archivioCorsi");
+}}
+      style={{
+        padding: "12px 22px",
+        border: "none",
+        borderRadius: "10px",
+        background: "#475569",
+        color: "#ffffff",
+        fontWeight: "700",
+        cursor: "pointer",
+      }}
+    >
+      📦 Archivio corsi
+    </button>
+  </div>
+)}
         <header className="header">
   <div>
     <h1>
@@ -5505,8 +5862,14 @@ reader.readAsText(file);
 <div
   className={`sidebarMenu ${
     sezione === "scuola" ? "sidebarMenuScuola" : ""
+  } ${
+    sezione === "scuola" &&
+    (menuAllieviAperto || menuGruppiAperto)
+      ? "sidebarMenuEspanso"
+      : ""
   }`}
 >
+
        <div className="sidebarBrand">
   <div className="sidebarTitle">SEA SRLS</div>
 
@@ -5624,18 +5987,208 @@ reader.readAsText(file);
   GESTIONE SCUOLA
 </div>
     <button
-      className={vista === "allievi" ? "active" : ""}
-      onClick={() => setVista("allievi")}
-    >
-      Allievi
-    </button>
-    <button
-  className={vista === "gruppiAllievi" ? "active" : ""}
-  onClick={() => setVista("gruppiAllievi")}
+  type="button"
+  className={vista === "allievi" ? "active" : ""}
+  onClick={() => {
+  setMenuAllieviAperto(!menuAllieviAperto);
+  setMenuGruppiAperto(false);
+}}
 >
-  Gruppi
+  {menuAllieviAperto ? "▼" : "▶"} Allievi
 </button>
 
+{menuAllieviAperto && (
+  <div
+    className="pannelloCorsiAllievi"
+    style={{ paddingLeft: "12px" }}
+  >
+
+    <button
+      type="button"
+      onClick={() => {
+        setCorsoAllieviSelezionato("generale");
+        setVista("allievi");
+      }}
+    >
+      Generale
+    </button>
+
+    {corsiAllievi
+  .filter((corso) => !corso.archiviato)
+  .sort((a, b) =>
+    (a.nome || "").localeCompare(b.nome || "", "it")
+  )
+  .map((corso) => (
+    <div
+      key={corso.firebaseId}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
+        marginBottom: "3px",
+      }}
+    >
+      <button
+        type="button"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflowWrap: "anywhere",
+        }}
+        onClick={() => {
+          setCorsoAllieviSelezionato(corso.firebaseId);
+          setVista("allievi");
+        }}
+      >
+        {corso.nome}
+      </button>
+
+      <button
+        type="button"
+        title="Rinomina corso"
+        onClick={() => rinominaCorso(corso)}
+        style={{
+          width: "30px",
+          flexShrink: 0,
+          padding: "6px 4px",
+          textAlign: "center",
+        }}
+      >
+        ✏️
+      </button>
+
+      <button
+        type="button"
+        title="Archivia corso"
+        onClick={() => cambiaArchivioCorso(corso)}
+        style={{
+          width: "30px",
+          flexShrink: 0,
+          padding: "6px 4px",
+          textAlign: "center",
+        }}
+      >
+        📦
+      </button>
+            <button
+        type="button"
+        title="Elimina corso"
+        onClick={() => eliminaCorso(corso)}
+        style={{
+          width: "30px",
+          flexShrink: 0,
+          padding: "6px 4px",
+          textAlign: "center",
+        }}
+      >
+        🗑️
+      </button>
+    </div>
+  ))}
+
+    <button type="button" onClick={creaNuovoCorso}>
+      + Nuovo corso
+    </button>
+
+    {false && (
+  <button
+    type="button"
+    onClick={() =>
+      setMostraCorsiArchiviati(!mostraCorsiArchiviati)
+    }
+  >
+    {mostraCorsiArchiviati ? "▼" : "▶"} Corsi archiviati
+  </button>
+)}
+
+    {false && mostraCorsiArchiviati &&
+  corsiAllievi
+    .filter((corso) => corso.archiviato)
+    .sort((a, b) =>
+      (a.nome || "").localeCompare(b.nome || "", "it")
+    )
+    .map((corso) => (
+      <div
+        key={corso.firebaseId}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+          marginBottom: "3px",
+        }}
+      >
+        <button
+          type="button"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflowWrap: "anywhere",
+          }}
+          onClick={() => {
+            setCorsoAllieviSelezionato(corso.firebaseId);
+            setVista("allievi");
+          }}
+        >
+          {corso.nome}
+        </button>
+
+        <button
+          type="button"
+          title="Riattiva corso"
+          onClick={() => cambiaArchivioCorso(corso)}
+          style={{
+            width: "36px",
+            flexShrink: 0,
+            padding: "6px 4px",
+            textAlign: "center",
+          }}
+        >
+          ↩️
+        </button>
+      </div>
+    ))}
+  </div>
+)}
+    <button
+  type="button"
+  className={vista === "gruppiAllievi" ? "active" : ""}
+  onClick={() => {
+  setMenuGruppiAperto(!menuGruppiAperto);
+  setMenuAllieviAperto(false);
+}}
+>
+  {menuGruppiAperto ? "▼" : "▶"} Gruppi
+</button>
+
+{menuGruppiAperto && (
+  <div
+    className="pannelloCorsiAllievi"
+    style={{ paddingLeft: "12px" }}
+  >
+    {corsiAllievi
+      .filter((corso) => !corso.archiviato)
+      .sort((a, b) =>
+        (a.nome || "").localeCompare(b.nome || "", "it")
+      )
+      .map((corso) => (
+        <button
+          key={corso.firebaseId}
+          type="button"
+          onClick={() => {
+            setCorsoGruppiSelezionato(corso.firebaseId);
+            setVista("gruppiAllievi");
+          }}
+          style={{
+            overflowWrap: "anywhere",
+          }}
+        >
+          {corso.nome}
+        </button>
+      ))}
+
+    
+  </div>
+)}
     
     <button
   type="button"
@@ -5692,21 +6245,8 @@ reader.readAsText(file);
 >
   Incassi Contanti
 </button>
-<hr
-  style={{
-    width: "calc(100% - 16px)",
-    margin: "12px 8px",
-    border: "none",
-    borderTop: "1px solid rgba(255,255,255,0.55)",
-  }}
-/>
 
-<button
-  className={vista === "archivioAllievi" ? "active" : ""}
-  onClick={() => setVista("archivioAllievi")}
->
-  Archivio
-</button>
+
 <div
   style={{
     marginTop: "6px",
@@ -8141,13 +8681,36 @@ return (
         </div>
       </div>
 
-      <button
-  type="button"
-  className="primary"
-  onClick={() => setMostraFormAllievo(true)}
+      <div
+  style={{
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+  }}
 >
-  + Nuovo allievo
-</button>
+  {corsoAllieviSelezionato !== "generale" && (
+    <button
+      type="button"
+      className="clientBtn"
+      style={{
+        background: "#2563eb",
+        color: "#ffffff",
+        fontWeight: "800",
+      }}
+      onClick={generaPdfElencoCorso}
+    >
+      🖨️ Stampa elenco
+    </button>
+  )}
+
+  <button
+    type="button"
+    className="primary"
+    onClick={() => setMostraFormAllievo(true)}
+  >
+    + Nuovo allievo
+  </button>
+</div>
     </div>
 
     {!mostraFormAllievo && (
@@ -8230,6 +8793,12 @@ return (
         {allievi
   .filter((allievo) => {
     if (allievo.archiviato) return false;
+    if (
+  corsoAllieviSelezionato !== "generale" &&
+  allievo.corsoAppartenenza !== corsoAllieviSelezionato
+) {
+  return false;
+}
 
     if (
       filtroTipoCorso !== "Tutti" &&
@@ -8458,7 +9027,8 @@ tipoPatente: allievo.tipoPatente || "",
   privacy: allievo.documenti?.privacy || false,
   autocertificazione: allievo.documenti?.autocertificazione || false,
 },
-            costoCorso: allievo.costoCorso || "",
+            corsoAppartenenza: allievo.corsoAppartenenza || "",
+costoCorso: allievo.costoCorso || "",
 versamenti: allievo.versamenti || [],
           });
 
@@ -9321,37 +9891,7 @@ versamenti: allievo.versamenti || [],
     }}
   />
 </label>
-<label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-  <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
-    Gruppo
-  </span>
 
-  <select
-    value={formAllievo.gruppo || ""}
-    onChange={(e) =>
-      setFormAllievo({
-        ...formAllievo,
-        gruppo: e.target.value,
-      })
-    }
-    style={{
-      width: "150px",
-      boxSizing: "border-box",
-      padding: "10px 12px",
-      border: "1px solid #cbd5e1",
-      borderRadius: "8px",
-      fontSize: "14px",
-      background: "white",
-    }}
-  >
-    <option value="">Seleziona gruppo</option>
-    <option value="Lunedì">Lunedì</option>
-    <option value="Martedì">Martedì</option>
-    <option value="Mercoledì">Mercoledì</option>
-    <option value="Giovedì">Giovedì</option>
-    <option value="Venerdì">Venerdì</option>
-  </select>
-</label>
 
 </div>
 <div
@@ -9362,18 +9902,18 @@ versamenti: allievo.versamenti || [],
     borderTop: "1px solid #e2e8f0",
     fontSize: "13px",
     fontWeight: "800",
-    color: "#dc2626",
+    color: "#000000",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   }}
 >
-  Dati finanziari
+  DATI CORSO
 </div>
 
 <div
   style={{
     display: "grid",
-    gridTemplateColumns: "260px 180px",
+    gridTemplateColumns: "260px 180px 150px",
     gap: "16px",
     alignItems: "end",
   }}
@@ -9428,23 +9968,106 @@ versamenti: allievo.versamenti || [],
 <option value="D1">D1</option>
     </select>
   </label>
-
   <label
+  style={{
+    display: "block",
+    marginTop: "12px",
+    fontWeight: "600",
+    fontSize: "14px",
+    color: "#334155",
+  }}
+>
+  Corso di appartenenza
+
+  <select
+    value={formAllievo.corsoAppartenenza || ""}
+    onChange={(e) =>
+      setFormAllievo({
+        ...formAllievo,
+        corsoAppartenenza: e.target.value,
+      })
+    }
     style={{
-      display: "flex",
-      flexDirection: "column",
-      gap: "6px",
+      width: "100%",
+      boxSizing: "border-box",
+      padding: "10px 12px",
+      marginTop: "6px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
     }}
   >
-    <span
-      style={{
-        fontSize: "13px",
-        fontWeight: "700",
-        color: "#334155",
-      }}
-    >
-      Costo corso €
-    </span>
+    <option value="">Da assegnare</option>
+
+    {corsiAllievi
+      .filter(
+        (corso) =>
+          !corso.archiviato ||
+          corso.firebaseId === formAllievo.corsoAppartenenza
+      )
+      .sort((a, b) =>
+        (a.nome || "").localeCompare(b.nome || "", "it")
+      )
+      .map((corso) => (
+        <option
+          key={corso.firebaseId}
+          value={corso.firebaseId}
+        >
+          {corso.nome}
+        </option>
+      ))}
+    </select>
+</label>
+
+<label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+  <span style={{ fontSize: "13px", fontWeight: "700", color: "#334155" }}>
+    Gruppo
+  </span>
+
+  <select
+    value={formAllievo.gruppo || ""}
+    onChange={(e) =>
+      setFormAllievo({
+        ...formAllievo,
+        gruppo: e.target.value,
+      })
+    }
+    style={{
+      width: "150px",
+      boxSizing: "border-box",
+      padding: "10px 12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+      background: "white",
+    }}
+  >
+    <option value="">Seleziona gruppo</option>
+    <option value="Lunedì">Lunedì</option>
+    <option value="Martedì">Martedì</option>
+    <option value="Mercoledì">Mercoledì</option>
+    <option value="Giovedì">Giovedì</option>
+    <option value="Venerdì">Venerdì</option>
+  </select>
+</label>
+
+<label
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  }}
+>
+  <span
+    style={{
+      fontSize: "13px",
+      fontWeight: "700",
+      color: "#334155",
+    }}
+  >
+    Costo corso €
+  </span>
+    
 
     <input
       type="number"
@@ -9469,7 +10092,53 @@ versamenti: allievo.versamenti || [],
     />
   </label>
 </div>
+<div style={{ marginTop: "18px" }}>
+  <label
+    style={{
+      display: "block",
+      fontSize: "14px",
+      fontWeight: "600",
+      color: "#334155",
+      marginBottom: "6px",
+    }}
+  >
+    Note allievo
+  </label>
 
+  <textarea
+    value={formAllievo.note || ""}
+    onChange={(e) =>
+      setFormAllievo({
+        ...formAllievo,
+        note: e.target.value,
+      })
+    }
+    placeholder="Inserisci eventuali note sull'allievo..."
+    rows={4}
+    style={{
+      width: "100%",
+      boxSizing: "border-box",
+      padding: "12px",
+      border: "1px solid #cbd5e1",
+      borderRadius: "8px",
+      fontSize: "14px",
+      fontFamily: "inherit",
+      resize: "vertical",
+    }}
+  />
+</div>
+<h3
+  style={{
+    width: "100%",
+    textAlign: "center",
+    color: "#dc2626",
+    fontSize: "18px",
+    fontWeight: "800",
+    margin: "24px 0 18px 0",
+  }}
+>
+  DATI FINANZIARI
+</h3>
 <div
   style={{
     marginTop: "18px",
@@ -10598,9 +11267,11 @@ versamenti: allievo.versamenti || [],
     {["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì"].map(
       (gruppo) => {
         const allieviGruppo = allievi.filter(
-          (allievo) =>
-            !allievo.archiviato && allievo.gruppo === gruppo
-        );
+  (allievo) =>
+    !allievo.archiviato &&
+    allievo.gruppo === gruppo &&
+    allievo.corsoAppartenenza === corsoGruppiSelezionato
+);
 
         return (
           <div
@@ -10663,6 +11334,7 @@ versamenti: allievo.versamenti || [],
     )}
   </section>
 )}
+
 {sezione === "scuola" && vista === "archivioAllievi" && (
   <section
     style={{
@@ -11568,18 +12240,8 @@ width: "100%",
     margin: "16px 0",
   }}
 />
-<h3
-  style={{
-    width: "100%",
-    textAlign: "center",
-    color: "#0f172a",
-    fontSize: "18px",
-    fontWeight: "700",
-    margin: "4px 0 18px 0",
-  }}
->
-  Dati finanziari
-</h3>
+
+
 <div
   style={{
     width: "100%",
