@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { jsPDF } from "jspdf";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
@@ -101,6 +101,47 @@ const [mostraFormRicambio, setMostraFormRicambio] = useState(false);
 const [corsoAllieviSelezionato, setCorsoAllieviSelezionato] = useState("generale");
 const [menuAllieviAperto, setMenuAllieviAperto] = useState(false);
 const [menuGruppiAperto, setMenuGruppiAperto] = useState(false);
+const menuAllieviRef = useRef(null);
+
+const menuGruppiRef = useRef(null);
+useEffect(() => {
+  const chiudiMenuGruppi = (event) => {
+    if (
+      menuGruppiAperto &&
+      menuGruppiRef.current &&
+      !menuGruppiRef.current.contains(event.target) &&
+      !event.target.closest(".pulsanteMenuGruppi")
+    ) {
+      setMenuGruppiAperto(false);
+    }
+  };
+
+  document.addEventListener("mousedown", chiudiMenuGruppi);
+
+  return () => {
+    document.removeEventListener("mousedown", chiudiMenuGruppi);
+  };
+}, [menuGruppiAperto]);
+useEffect(() => {
+  const chiudiMenuAllievi = (event) => {
+    if (
+      menuAllieviAperto &&
+      menuAllieviRef.current &&
+      !menuAllieviRef.current.contains(event.target) &&
+      !event.target.closest(".pulsanteMenuAllievi")
+    ) {
+      setMenuAllieviAperto(false);
+    }
+  };
+
+  document.addEventListener("mousedown", chiudiMenuAllievi);
+
+  return () => {
+    document.removeEventListener("mousedown", chiudiMenuAllievi);
+  };
+}, [menuAllieviAperto]);
+
+
 const [corsoGruppiSelezionato, setCorsoGruppiSelezionato] = useState("");
 const [mostraCorsiArchiviati, setMostraCorsiArchiviati] = useState(false);
 const creaNuovoCorso = async () => {
@@ -2864,6 +2905,168 @@ function generaPdfIncassiPos() {
     y,
     { align: "right" }
   );
+
+  const pdfBlob = pdf.output("blob");
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+
+  const finestraStampa = window.open(pdfUrl);
+
+  if (finestraStampa) {
+    finestraStampa.onload = () => {
+      finestraStampa.print();
+    };
+  }
+}
+function generaPdfFattureDaEmettere() {
+  const pdf = new jsPDF();
+
+  const movimenti = allievi.flatMap((allievo) =>
+    (allievo.versamenti || [])
+      .filter((versamento) => versamento.fatturato !== true)
+      .map((versamento) => ({
+        nome: `${allievo.nome || ""} ${allievo.cognome || ""}`.trim(),
+        codiceFiscale: allievo.codiceFiscale || "",
+        indirizzo: allievo.indirizzo || "",
+        civico: allievo.civico || "",
+        citta: allievo.citta || "",
+        provincia: allievo.provincia || "",
+        cap: allievo.cap || "",
+        data: versamento.data || "",
+        importo: Number(versamento.importo || 0),
+        metodo: versamento.metodo || "",
+      }))
+  );
+
+  const totale = movimenti.reduce(
+    (somma, movimento) => somma + movimento.importo,
+    0
+  );
+
+  const formatoEuro = (importo) =>
+    `EUR ${importo.toFixed(2)}`;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(17);
+  pdf.text("FATTURE DA EMETTERE", 105, 20, {
+    align: "center",
+  });
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.text(
+    `Data stampa: ${new Date().toLocaleDateString("it-IT")}`,
+    190,
+    30,
+    { align: "right" }
+  );
+
+  pdf.line(20, 35, 190, 35);
+
+  let y = 45;
+
+  const nuovaPaginaSeNecessaria = (altezza = 10) => {
+    if (y + altezza > 275) {
+      pdf.addPage();
+      y = 20;
+    }
+  };
+
+  movimenti.forEach((movimento, index) => {
+    nuovaPaginaSeNecessaria(48);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.text(
+      `${index + 1}. ${movimento.nome || "-"}`,
+      20,
+      y
+    );
+    y += 7;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+
+    pdf.text(
+      `Codice fiscale: ${movimento.codiceFiscale || "-"}`,
+      20,
+      y
+    );
+    y += 6;
+
+    const indirizzo = [
+      movimento.indirizzo,
+      movimento.civico,
+    ].filter(Boolean).join(" ");
+
+    const localita = [
+      movimento.cap,
+      movimento.citta,
+      movimento.provincia
+        ? `(${movimento.provincia})`
+        : "",
+    ].filter(Boolean).join(" ");
+
+    const residenza = [indirizzo, localita]
+      .filter(Boolean)
+      .join(", ") || "-";
+
+    const righeResidenza = pdf.splitTextToSize(
+      `Residenza: ${residenza}`,
+      170
+    );
+
+    nuovaPaginaSeNecessaria(righeResidenza.length * 5 + 22);
+    pdf.text(righeResidenza, 20, y);
+    y += righeResidenza.length * 5 + 2;
+
+    const data = movimento.data
+      ? new Date(
+          movimento.data + "T00:00:00"
+        ).toLocaleDateString("it-IT")
+      : "-";
+
+    pdf.text(`Data versamento: ${data}`, 20, y);
+    y += 6;
+
+    pdf.text(
+      `Metodo pagamento: ${movimento.metodo || "-"}`,
+      20,
+      y
+    );
+
+    pdf.setFont("helvetica", "bold");
+    pdf.text(
+      formatoEuro(movimento.importo),
+      190,
+      y,
+      { align: "right" }
+    );
+
+    y += 7;
+    pdf.line(20, y, 190, y);
+    y += 8;
+  });
+
+  if (movimenti.length === 0) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(11);
+    pdf.text(
+      "Nessun versamento da fatturare.",
+      105,
+      60,
+      { align: "center" }
+    );
+    y = 75;
+  }
+
+  nuovaPaginaSeNecessaria(20);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+  pdf.text("TOTALE DA FATTURARE", 20, y);
+  pdf.text(formatoEuro(totale), 190, y, {
+    align: "right",
+  });
 
   const pdfBlob = pdf.output("blob");
   const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -5988,7 +6191,7 @@ reader.readAsText(file);
 </div>
     <button
   type="button"
-  className={vista === "allievi" ? "active" : ""}
+ className={`pulsanteMenuAllievi ${vista === "allievi" ? "active" : ""}`}
   onClick={() => {
   setMenuAllieviAperto(!menuAllieviAperto);
   setMenuGruppiAperto(false);
@@ -5999,6 +6202,7 @@ reader.readAsText(file);
 
 {menuAllieviAperto && (
   <div
+    ref={menuAllieviRef}
     className="pannelloCorsiAllievi"
     style={{ paddingLeft: "12px" }}
   >
@@ -6006,9 +6210,10 @@ reader.readAsText(file);
     <button
       type="button"
       onClick={() => {
-        setCorsoAllieviSelezionato("generale");
-        setVista("allievi");
-      }}
+  setCorsoAllieviSelezionato("generale");
+  setVista("allievi");
+  setMenuAllieviAperto(false);
+}}
     >
       Generale
     </button>
@@ -6036,9 +6241,10 @@ reader.readAsText(file);
           overflowWrap: "anywhere",
         }}
         onClick={() => {
-          setCorsoAllieviSelezionato(corso.firebaseId);
-          setVista("allievi");
-        }}
+  setCorsoAllieviSelezionato(corso.firebaseId);
+  setVista("allievi");
+  setMenuAllieviAperto(false);
+}}
       >
         {corso.nome}
       </button>
@@ -6151,7 +6357,7 @@ reader.readAsText(file);
 )}
     <button
   type="button"
-  className={vista === "gruppiAllievi" ? "active" : ""}
+  className={`pulsanteMenuGruppi ${vista === "gruppiAllievi" ? "active" : ""}`}
   onClick={() => {
   setMenuGruppiAperto(!menuGruppiAperto);
   setMenuAllieviAperto(false);
@@ -6162,6 +6368,7 @@ reader.readAsText(file);
 
 {menuGruppiAperto && (
   <div
+    ref={menuGruppiRef}
     className="pannelloCorsiAllievi"
     style={{ paddingLeft: "12px" }}
   >
@@ -6175,9 +6382,10 @@ reader.readAsText(file);
           key={corso.firebaseId}
           type="button"
           onClick={() => {
-            setCorsoGruppiSelezionato(corso.firebaseId);
-            setVista("gruppiAllievi");
-          }}
+  setCorsoGruppiSelezionato(corso.firebaseId);
+  setVista("gruppiAllievi");
+  setMenuGruppiAperto(false);
+}}
           style={{
             overflowWrap: "anywhere",
           }}
@@ -6244,6 +6452,12 @@ reader.readAsText(file);
   onClick={generaPdfIncassiContanti}
 >
   Incassi Contanti
+</button>
+<button
+  type="button"
+  onClick={generaPdfFattureDaEmettere}
+>
+  Fatture da emettere
 </button>
 
 
@@ -7906,9 +8120,15 @@ left: "250px",
 <button
   type="button"
   onClick={() => {
-    const nuovi = (formRicambio.ricambiDettaglio || []).filter(
-      (_, i) => i !== index
-    );
+  const conferma = window.confirm(
+    "Sei sicuro di voler eliminare questo ricambio dall'ordine?"
+  );
+
+  if (!conferma) return;
+
+  const nuovi = (formRicambio.ricambiDettaglio || []).filter(
+    (_, i) => i !== index
+  );
 
     setFormRicambio({
       ...formRicambio,
@@ -8876,7 +9096,14 @@ return (
     justifySelf: "start",
   }}
 >
-  {allievo.cellulare || "-"}
+  <span
+  style={{
+    color: allievo.gruppo ? "#334155" : "#dc2626",
+    fontWeight: allievo.gruppo ? "500" : "700",
+  }}
+>
+  {allievo.gruppo || "⚠️ NON ASSEGNATO"}
+</span>
 </div>
 
 <div
@@ -10338,9 +10565,15 @@ versamenti: allievo.versamenti || [],
   <button
     type="button"
     onClick={() => {
-      const nuoviVersamenti = [
-        ...(formAllievo.versamenti || []),
-      ];
+  const conferma = window.confirm(
+    "⚠️ Sei sicuro di voler eliminare questo versamento?\n\nL'operazione non potrà essere annullata dopo il salvataggio."
+  );
+
+  if (!conferma) return;
+
+  const nuoviVersamenti = [
+    ...(formAllievo.versamenti || []),
+  ];
 
       nuoviVersamenti.splice(index, 1);
 
@@ -10361,6 +10594,38 @@ versamenti: allievo.versamenti || [],
   >
     Elimina
   </button>
+  <label
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    whiteSpace: "nowrap",
+    fontSize: "13px",
+    fontWeight: "700",
+    cursor: "pointer",
+  }}
+>
+  <input
+    type="checkbox"
+    checked={versamento.fatturato === true}
+    onChange={(e) => {
+      const nuoviVersamenti = [
+        ...(formAllievo.versamenti || []),
+      ];
+
+      nuoviVersamenti[index] = {
+        ...nuoviVersamenti[index],
+        fatturato: e.target.checked,
+      };
+
+      setFormAllievo({
+        ...formAllievo,
+        versamenti: nuoviVersamenti,
+      });
+    }}
+  />
+  Fatturato
+</label>
 </div>
       </div>
     ))}
@@ -12156,9 +12421,15 @@ width: "100%",
       <button
         type="button"
         onClick={() => {
-          const nuovi = (form.ricambiDettaglio || []).filter(
-            (_, i) => i !== index
-          );
+  const conferma = window.confirm(
+    "Sei sicuro di voler eliminare questo ricambio dal lavoro?"
+  );
+
+  if (!conferma) return;
+
+  const nuovi = (form.ricambiDettaglio || []).filter(
+    (_, i) => i !== index
+  );
 
           setForm({
             ...form,
@@ -13051,9 +13322,15 @@ padding: "10px",
       <button
         type="button"
         onClick={() => {
-          const nuovi = (formPreventivo.ricambiDettaglio || []).filter(
-            (_, i) => i !== index
-          );
+  const conferma = window.confirm(
+    "Sei sicuro di voler eliminare questo ricambio dal preventivo?"
+  );
+
+  if (!conferma) return;
+
+  const nuovi = (formPreventivo.ricambiDettaglio || []).filter(
+    (_, i) => i !== index
+  );
 
           setFormPreventivo({
             ...formPreventivo,
