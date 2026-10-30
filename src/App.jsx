@@ -9255,6 +9255,7 @@ tipoPatente: allievo.tipoPatente || "",
   autocertificazione: allievo.documenti?.autocertificazione || false,
 },
             corsoAppartenenza: allievo.corsoAppartenenza || "",
+tipoCorso: allievo.tipoCorso || "",
 costoCorso: allievo.costoCorso || "",
 versamenti: allievo.versamenti || [],
           });
